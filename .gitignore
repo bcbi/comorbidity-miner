@@ -1,0 +1,18 @@
+# OS Junk Files
+*.DS_Store
+
+# R Project files
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rapp.history
+dbg.R
+
+# Data files
+data/mimic_tables/*
+data/output/*
+data/input/*
+nomatch_icd9_ccs_codes.csv
+data/EMR-robots-100/*
+data/CDC-vitals/*
