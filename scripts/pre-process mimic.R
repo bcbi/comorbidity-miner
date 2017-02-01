@@ -1,12 +1,10 @@
-############################
-############################
-# ashley s. lee
-# data science practice
-# brown university cit
-# 2017.01.29
-# brown center for biomedical informatics
-############################
-############################
+# ----------------------------------------|
+# ashley s. lee                           |
+# data science practice                   |
+# brown university cis                    |
+# 2017.01.29                              |
+# brown center for biomedical informatics |
+# ----------------------------------------|
 
 
 # TODO: turn this script into a function and source(pre-process mimic.R) in global
@@ -27,7 +25,7 @@ base_diags <- base_patients %>%
   group_by(subject_id) %>%
   mutate(admit_id = dense_rank(admittime)) %>%
   ungroup() %>%
-  select(subject_id, icd9_code, admit_id, age, age_dod)
+  select(subject_id, icd_code, admit_id, age, age_dod)
 
 # demographics
 mimic_demographics <- base_patients %>%
@@ -39,18 +37,18 @@ mimic_demographics <- base_patients %>%
 
 # temporal
 mimic_temporal <- base_diags %>%
-  left_join(icd9_ccs, by = c('icd9_code' = 'icd_code')) %>%
-  mutate(icd_code = paste0(stri_replace_all_fixed(icd9_code, ',', ' '))) %>%
+  left_join(icd9_ccs, by = c('icd_code' = 'icd_code')) %>%
+  mutate(icd_code = paste0(stri_replace_all_fixed(icd_code, ',', ' '))) %>%
   select(subject_id, admit_id, icd_code) %>%
   group_by(subject_id, admit_id) %>%
   summarise_each(funs(paste(., collapse = ',')))
 
 # write cohort to csv
 # write temporal format data and mimic demographics to ./data/input/ folder (for cohort selection, then input into SPADE/APRIORI algorithms)
-f_name_t <- paste0(raw_datadir, 'input/mimic_temporal.txt')
+f_name_t <- paste0(csv_dir, 'mimic_temporal.txt')
 write.table(mimic_temporal, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE)
 
-f_name_d <- paste0(raw_datadir, 'input/mimic_demographics.txt')
+f_name_d <- paste0(csv_dir, 'mimic_demographics.txt')
 write.table(mimic_demographics, f_name_d, quote = FALSE, sep = ',', row.names = FALSE, col.names = FALSE)
 
 
@@ -95,4 +93,69 @@ write.table(mimic_demographics, f_name_d, quote = FALSE, sep = ',', row.names = 
 #   group_by(icd9_code) %>%
 #   summarise(n = n()) %>%
 #   filter(n > 1) # there are no ICD9 codes that map to multiple CCS categories in MIMIC
+
+# USE CASE: mental health, substance abuse comorbidity differences between datasets
+# number of diagnoses and number of patients per icd code
+# - icd9 codes
+mc <- icd9_ccs %>%
+  filter(ccs_code %in% c(657)) %>%
+  select(icd_code, icd_desc)
+ac <- icd9_ccs %>%
+  filter(ccs_code %in% c(651)) %>%
+  select(icd_code, icd_desc)
+sc <- icd9_ccs %>%
+  filter(ccs_code %in% c(660, 661)) %>%
+  select(icd_code, icd_desc)
+# - num codes
+mcp <- mimic_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code) %>%
+  left_join(icd9_ccs, by = 'icd_code') %>%
+  filter(icd_code %in% mc$icd_code)
+acp <- mimic_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code) %>%
+  left_join(icd9_ccs, by = 'icd_code') %>%
+  filter(icd_code %in% ac$icd_code)
+scp <- mimic_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code) %>%
+  left_join(icd9_ccs, by = 'icd_code') %>%
+  filter(icd_code %in% sc$icd_code)
+# - num patients
+mcpd <- mcp %>%
+  distinct(subject_id, .keep_all = T)
+acpd <- acp %>%
+  distinct(subject_id, .keep_all = T)
+scpd <- scp %>%
+  distinct(subject_id, .keep_all = T)
+# - histograms mood and anxiety disorders
+ggplot(mcp, aes(icd_desc, fill = ccs_desc)) +
+  geom_bar(stat = 'count') + 
+  coord_flip() +
+  ggtitle('Mood Disorder Codes in MIMIC')
+ggplot(mcpd, aes(icd_desc)) +
+  geom_bar(stat = 'count') + 
+  coord_flip() +
+  ggtitle('Patients with Mood Disorders in MIMIC (4718 total patients)')
+# - histograms mood and anxiety disorders
+ggplot(acp, aes(icd_desc, fill = ccs_desc)) +
+  geom_bar(stat = 'count') + 
+  coord_flip() +
+  ggtitle('Anxiety Disorder Codes in MIMIC')
+ggplot(acpd, aes(icd_desc)) +
+  geom_bar(stat = 'count') + 
+  coord_flip() +
+  ggtitle('Patients with Anxiety Disorders in MIMIC 1850 total patients)')
+# histograms substance and alcohol disorders
+ggplot(scp, aes(icd_desc, fill = ccs_desc)) +
+  geom_bar(stat = 'count') + 
+  coord_flip() +
+  ggtitle('Substance and Alcohol Disorder Codes in MIMIC')
+ggplot(scpd, aes(icd_desc, fill = ccs_desc)) +
+  geom_bar(stat = 'count') + 
+  coord_flip() +
+  ggtitle('Patients with Substance or Alcohol Disorders in MIMIC (4800 total patients)')
+
+ 
   

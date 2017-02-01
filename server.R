@@ -1,12 +1,10 @@
-############################
-############################
-# ashley s. lee
-# data science practice
-# brown university cit
-# 2017.01.29
-# brown center for biomedical informatics
-############################
-############################
+# ----------------------------------------|
+# ashley s. lee                           |
+# data science practice                   |
+# brown university cis                    |
+# 2017.01.29                              |
+# brown center for biomedical informatics |
+# ----------------------------------------|
 
 shinyServer(function(input, output, session) {
 
@@ -16,8 +14,8 @@ shinyServer(function(input, output, session) {
 
 # read in pre-processed data from CSV
 # TODO: add a switch for different data sets with input$data == 'fname'
-base_temporal <- read_csv(paste0(csv_dir, 'input/mimic_temporal.txt'), col_names = F)
-base_demographics <- read_csv(paste0(csv_dir, 'input/mimic_demographics.txt'), col_names = F)
+base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
+base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
 
 names(base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
 names(base_demographics)[1] <- 'subject_id'
@@ -195,7 +193,7 @@ output$patientsTable <- renderDataTable({
                list(extend='pdf', filename= 'hitStats')),
         text = 'Download')),
       scrollX = TRUE,
-      pageLength = nrow(get_cohort()$unique_icd9),
+      pageLength = nrow(get_cohort()$unique_icd),
       order = list(list(1, 'asc'))
     ), rownames = F)
 })
@@ -276,6 +274,7 @@ get_seqs <- reactive({
   sequences <- cspade(ld, parameter=list(support = input$supportS), control = list(verbose = TRUE))
   
   #---------------------------------------seq_df---------------------------------------#
+  #--------------------re-format output--------------------#
   # order sequences by support
   seqdf <- as(sequences, 'data.frame')
   seqdf <- arrange(seqdf, desc(support))
@@ -295,6 +294,7 @@ get_seqs <- reactive({
   states <- separate(seqdf[-2], sequence, state_names, " => ", fill = 'right')
   seqdf <- cbind(sequence = seqdf$sequence, support = seqdf$support, states)
   
+  #--------------------flag sequence repeats/lengths--------------------#
   # flag 4 different types of repeats within sequences and add length of sequence
   if(len == 1) {
     
@@ -376,6 +376,7 @@ get_seqs <- reactive({
       select(sequence, support, c_1, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec)
   }
 
+  #--------------------remove sequences--------------------#
   ### remove sequences with "|", indicating multiple items for an event in a sequence
   seqdf <- filter(seqdf, !grepl('[|]', sequence))
 
@@ -400,7 +401,8 @@ get_seqs <- reactive({
       filter(repeats == 0) %>%
       select(-repeats)
   }
-
+  
+  #--------------------re-format sequences output--------------------#
   ### replace codes with descriptions
   if(len == 3) {
     if(input$seq_grp_lvl == 'icd') {
@@ -491,7 +493,7 @@ get_seqs <- reactive({
         select(sequence, support, c_1, c_2 = icd_chp_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
         left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_3' = 'icd_chp_code')) %>%
         select(sequence, support, c_1, c_2, c_3 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-    } else if(input$seq_grp_lvl == 'ccs') {
+    } else if(input$seq_grp_lvl == 'ccs_s') {
       seqdf <- seqdf %>%
         left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
         select(sequence, support, c_1 = ccs_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
@@ -545,7 +547,7 @@ get_seqs <- reactive({
         select(sequence, support, c_1 = icd_chp_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
         left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
         select(sequence, support, c_1, c_2 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    } else if(input$seq_grp_lvl == 'ccs') {
+    } else if(input$seq_grp_lvl == 'ccs_s') {
       seqdf <- seqdf %>%
         left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
         select(sequence, support, c_1 = ccs_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
@@ -578,6 +580,7 @@ get_seqs <- reactive({
     }
   }
   
+  #--------------------filter sequences--------------------#
   ### remove sequences containing unclassified codes 
   if(len == 3) {
     seqdf <- seqdf %>%
@@ -628,7 +631,7 @@ get_seqs <- reactive({
 
     for (i in 1:nrow(seq_cache)) {
       if(!(sum(is.na(seq_cache[i,])))>=1){
-        # add tag indicating which state - needs to uniquely identify each link
+        ### add tag indicating which state - needs to uniquely identify each link
         # support
         #seq_cache[i,]$from <- paste0(seq_cache[i,]$from, ' (', seq_cache[i,]$max_support + (j-2)* 0.000001, ')')
         #seq_cache[i,]$to <- paste0(seq_cache[i,]$to, ' (', seq_cache[i,]$max_support + (j-1) * 0.000001, ')')

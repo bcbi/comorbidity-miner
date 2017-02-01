@@ -1,12 +1,10 @@
-############################
-############################
-# ashley s. lee
-# data science practice
-# brown university cit
-# 2017.01.29
-# brown center for biomedical informatics
-############################
-############################
+# ----------------------------------------|
+# ashley s. lee                           |
+# data science practice                   |
+# brown university cis                    |
+# 2017.01.29                              |
+# brown center for biomedical informatics |
+# ----------------------------------------|
 
 # TOFIX: size of tables and plots
 
