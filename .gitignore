@@ -15,4 +15,5 @@ data/output/*
 data/input/*
 nomatch_icd9_ccs_codes.csv
 data/EMR-robots-100/*
-data/CDC-vitals/*
+data/CDC-vitals/*				 # freely available online but too large for repo
+data/icd_grouping/snowmedct_icd10cm_20160901.tsv # need umls license for this data
