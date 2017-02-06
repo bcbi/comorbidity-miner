@@ -20,7 +20,7 @@ shinyUI(dashboardPage(
       id = "sbMenu",
       
       menuItem(
-        "Cohort Settings", tabName = "cohort"
+        "Data and Cohort Settings", tabName = "cohort"
       ),
       
       menuItem(
@@ -48,16 +48,19 @@ shinyUI(dashboardPage(
               fluidRow(
                 
               column(width = 12,
-                       box(width = 12,
-                           selectInput("icd_version",
-                                       "Select ICD Version:",
-                                       choices = c('ICD-9' = 'icd9',
-                                                   'ICD-10' = 'icd10'),
-                                       selected = 'icd9')
-                  )
-                ),
+                     
+                     box(width = 12,
+                         selectInput("data_src",
+                                     "Select data source:",
+                                     choices = c('MIMIC III' = 'mimic',
+                                                 'CDC Mortality' = 'cdc_mortality',
+                                                 'AEOLUS' = 'aeolus'),
+                                     selected = 'mimic')
+                     )
+              ),
               
                column(width = 6,
+                
                  box(width = 12,
                      selectInput("grouping_lvl",
                                  "Select condition 1 granularity:",
@@ -65,9 +68,7 @@ shinyUI(dashboardPage(
                                             'ICD Chapter' = 'icd_c', 
                                             'CCS Single-level' = 'ccs_s', 
                                             'CCS Multi-level 1' = 'ccs1', 
-                                            'CCS Multi-level 2' = 'ccs2', 
-                                            'CCS Multi-level 3' = 'ccs3',
-                                            'PheWAS' = 'phewas'),
+                                            'CCS Multi-level 2' = 'ccs2'),
                                 selected = 'ccs2')
                   ),
                   
@@ -79,8 +80,8 @@ shinyUI(dashboardPage(
                   box(width = 12,
                       radioButtons("interaction",
                                    "Select condition interaction:",
-                                   choices = c("Condition 1 + 2", "Condition 1 - 2"),
-                                   selected = "Condition 1 + 2")
+                                   choices = c("Condition 1 + Condition 2", "Condition 1 - Condition 2"),
+                                   selected = "Condition 1 + Condition 2")
                   ),
                   box(width = 12,
                       selectInput("seq_grp_lvl",
@@ -89,14 +90,13 @@ shinyUI(dashboardPage(
                                              'ICD Chapter' = 'icd_c', 
                                              'CCS Single-level' = 'ccs_s', 
                                              'CCS Multi-level 1' = 'ccs1', 
-                                             'CCS Multi-level 2' = 'ccs2', 
-                                             'CCS Multi-level 3' = 'ccs3',
-                                             'PheWAS' = 'phewas'),
+                                             'CCS Multi-level 2' = 'ccs2'),
                                  selected = 'ccs2')
                   )
                ),
 
                 column(width = 6,
+              
                   box(
                     width = 12,
                     selectInput("grouping_lvl2",
@@ -105,9 +105,7 @@ shinyUI(dashboardPage(
                                             'ICD Chapter' = 'icd_c', 
                                             'CCS Single-level' = 'ccs_s', 
                                             'CCS Multi-level 1' = 'ccs1', 
-                                            'CCS Multi-level 2' = 'ccs2', 
-                                            'CCS Multi-level 3' = 'ccs3',
-                                            'PheWAS' = 'phewas'),
+                                            'CCS Multi-level 2' = 'ccs2'),
                                 selected = 'ccs1')
                   ),
                   
@@ -139,7 +137,7 @@ shinyUI(dashboardPage(
               tabsetPanel(
                 tabPanel("Demographics", dataTableOutput("demographicsTable")),
                 tabPanel("Codes", dataTableOutput("patientsTable")),
-                tabPanel("ICD-9 Mapping", dataTableOutput("outGroupTable")) 
+                tabPanel("ICD Mapping", dataTableOutput("outGroupTable")) 
                 )
               ),
               

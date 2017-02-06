@@ -7,7 +7,6 @@
 # ----------------------------------------|
 
 
-# TODO: turn this script into a function and source(pre-process mimic.R) in global
 
 # base table of patients with number of admits and age of birth/death
 base_patients <- mimic_admit %>% 
@@ -43,8 +42,7 @@ mimic_temporal <- base_diags %>%
   group_by(subject_id, admit_id) %>%
   summarise_each(funs(paste(., collapse = ',')))
 
-# write cohort to csv
-# write temporal format data and mimic demographics to ./data/input/ folder (for cohort selection, then input into SPADE/APRIORI algorithms)
+# write temporal format data and mimic demographics to ./data/input/ folder (read into memory in global.R)
 f_name_t <- paste0(csv_dir, 'mimic_temporal.txt')
 write.table(mimic_temporal, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE)
 

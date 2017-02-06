@@ -37,8 +37,9 @@ raw_datadir <- './data/'
 csv_dir <- './data/input/'
 
 
+
 ######################
-# pull data
+# pull raw data
 ######################
 
 if (src == 'CSV') {
@@ -50,46 +51,6 @@ if (src == 'CSV') {
   mimic_icd9 <- read_csv(paste0(raw_datadir, 'mimic_tables/D_ICD_DIAGNOSES.csv.gz'), na = c('NA','','NULL','null'))
   mimic_admit <- read_csv(paste0(raw_datadir, 'mimic_tables/ADMISSIONS.csv.gz'), na = c('NA','','NULL','null'))
   mimic_patients <- read_csv(paste0(raw_datadir, 'mimic_tables/PATIENTS.csv.gz'), na = c('NA','','NULL','null'))
-  
-  # icd9 : ccs - icd9 chapter - phewas
-  icd9_ccs_multi <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_multi_2015.csv'), col_types = c('ccccccccc'))
-  icd9_ccs_single <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2015.csv'))
-  icd9_ccs_desc <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2013.csv'))
-  icd9_chap <- read_csv(paste0(raw_datadir, 'icd_grouping/icd9_chapters.csv'))
-  icd9_phewas <- read_tsv(paste0(raw_datadir, 'icd_grouping/PheWAS_code_translation_v1_2.txt'))
-  
-  names(mimic_diag) <- tolower(names(mimic_diag))
-  names(mimic_diag)[5] <- 'icd_code'
-  names(mimic_icd9) <- tolower(names(mimic_icd9))
-  names(mimic_icd9)[2] <- 'icd_code'
-  names(mimic_admit) <- tolower(names(mimic_admit))
-  names(mimic_patients) <- tolower(names(mimic_patients))
-  names(icd9_ccs_multi) <- c('icd_code', 'lvl1_cd', 'lvl1_desc', 'lvl2_cd', 'lvl2_desc', 'lvl3_cd', 'lvl3_desc', 'lvl4_cd', 'lvl4_desc')
-  names(icd9_ccs_single) <- c('icd_code', 'ccs_cat', 'ccs_desc', 'icd_desc', 'ccs_opt_cat', 'cch_opt_desc')
-  names(icd9_ccs_desc) <- c('ccs_cat', 'ccs_full_desc')
-  
-  
-  #-----------------------------CDC Mortality 2011-2015-----------------------------#
-  
-  # icd10-cm - icd10 chapter - CCS
-  icd10_ccs <- read_csv(paste0(raw_datadir, 'icd_grouping/ccs_dx_icd10cm_2017.csv'))
-  #icd10_phewas <- read_tsv(paste0(raw_datadir, 'icd_grouping/XXXX.txt')) TODO:
-
-  names(icd10_ccs) <- c("icd_code","ccs_code","icd_desc","ccs_desc","ccs1_code","ccs1_desc","ccs2_code","ccs2_desc")
-  names(icd10_ccs) <- tolower(names(icd10_ccs))
-  names(icd10_ccs) <- gsub("'", "", names(icd10_ccs))
-  names(icd10_ccs) <- gsub("ccs ", "", names(icd10_ccs))
-  names(icd10_ccs) <- gsub("multi ", "", names(icd10_ccs))
-  names(icd10_ccs) <- gsub("icd-10-cm ", "", names(icd10_ccs))
-  names(icd10_ccs) <- gsub(" ", "", names(icd10_ccs))
-  
-  # remove single quotes from ccs table and reorder columns to match icd9
-  icd10_ccs <- icd10_ccs %>%
-    mutate(icd_code = gsub("'", "", icd_code),
-           ccs_code = gsub("'", "", ccs_code),
-           ccs1_code = gsub("'", "", ccs1_code),
-           ccs2_code = gsub("'", "", ccs2_code)) %>%
-    select(icd_code,icd_desc,ccs_code,ccs_desc,ccs1_code,ccs1_desc,ccs2_code,ccs2_desc)
   
   
   # #-----------------------------EMR ROBOTS-----------------------------#
@@ -121,17 +82,12 @@ if (src == 'CSV') {
   icd9_ccs_single <- collect(tbl(mimic, 'd_icd_diagnoses_ccs_single'))
   icd9_ccs_desc <- collect(tbl(mimic, 'd_ccs_cat_single'))
   
+  
   #-----------------------------aeolus db-----------------------------#
 
-  # TODO: test with aeolus
-  ehr <- src_mysql(dbname = 'aeolus')
-  # collect some tables into memory
-  table1 <- collect(tbl(ehr, 'diagnoses_icd'))
-  table2 <- collect(tbl(ehr, 'patient_demographics'))
+
   
 }
-
-
 
 
 
@@ -141,37 +97,24 @@ if (src == 'CSV') {
 
 #-----------------------------ICD10-----------------------------#
 
-# mapping ICD-10 code to CCS category
-child <- fread("~/child.csv",stringsAsFactors = TRUE)
-child <- child[,-2]
-ccs <- fread("~/Downloads/ccs_dx_icd10cm_2017.csv")
-names(ccs) <- c("icd_10_code","ccs_category","icd_10_des","ccs_des","ccs_lv1","ccs_lv1_label","ccs_lv2","ccs_lv2_label")
-# remove single quote
-ccs$icd_10_code <- gsub("'", '', ccs$icd_10_code)
-ccs$ccs_category <- gsub("'", '', ccs$ccs_category)
-ccs$ccs_lv1 <- gsub("'", '', ccs$ccs_lv1)
-ccs$ccs_lv2 <- gsub("'", '', ccs$ccs_lv2)
-# check length of icd-10 codes in CDC data and CCS mapping file
-max(nchar(child$icd_10_code))
-min(nchar(child$icd_10_code))
-max(nchar(ccs$icd_10_code))
-min(nchar(ccs$icd_10_code))
-# extract the first 4 strings of icd-10 code in ccs mapping
-ccs$icd_10_code <- substring(ccs$icd_10_code,1,4)
-# select icd-10 code, ccs single level category and ccs description columns
-ccs.sub <- ccs[,c(1,2,4)]
-# after extracting the first 4 strings, the granularity of icd-10 codes has been reduced
-# remove the duplicated rows
-ccs.unique <- unique(ccs.sub)
-# subset one-to-many matching
-one_to_many <- ccs.unique[duplicated(ccs.unique$icd_10_code) | duplicated(ccs.unique$icd_10_code, fromLast=TRUE),]
-# simply left join the children dataset with unique CCS category
-join <- child %>% left_join(ccs.unique,by="icd_10_code")
-# exact matched icd-10 codes, containing one-to-many matchings
-matched <- subset(join,subset=!is.na(ccs_category),select = c("icd_10_code","ccs_category","ccs_des"))
-# unmatched icd-10 codes including both non-corresponding CCS category and pattern matching
-missing <- subset(join,subset=(is.na(ccs_category)),select = c("icd_10_code","ccs_category","ccs_des"))
+# icd10-cm - icd10 chapter - CCS
+icd10_ccs <- read_csv(paste0(raw_datadir, 'icd_grouping/ccs_icd10cm_2017.csv'))
 
+names(icd10_ccs) <- c("icd_code","ccs_code","icd_desc","ccs_desc","ccs1_code","ccs1_desc","ccs2_code","ccs2_desc")
+names(icd10_ccs) <- tolower(names(icd10_ccs))
+names(icd10_ccs) <- gsub("'", "", names(icd10_ccs))
+names(icd10_ccs) <- gsub("ccs ", "", names(icd10_ccs))
+names(icd10_ccs) <- gsub("multi ", "", names(icd10_ccs))
+names(icd10_ccs) <- gsub("icd-10-cm ", "", names(icd10_ccs))
+names(icd10_ccs) <- gsub(" ", "", names(icd10_ccs))
+
+# remove single quotes from ccs table and reorder columns to match icd9
+icd10_ccs <- icd10_ccs %>%
+  mutate(icd_code = gsub("'", "", icd_code),
+         ccs_code = gsub("'", "", ccs_code),
+         ccs1_code = gsub("'", "", ccs1_code),
+         ccs2_code = gsub("'", "", ccs2_code)) %>%
+  select(icd_code,icd_desc,ccs_code,ccs_desc,ccs1_code,ccs1_desc,ccs2_code,ccs2_desc)
 
 # make icd10 chapter description table
 icd10_chap <- data.frame(icd_chp_code = c(1:22),
@@ -188,7 +131,7 @@ icd10_chap <- data.frame(icd_chp_code = c(1:22),
                      'factors influencing health status and contact with health services','codes for special purposes'))
 
 
-# CCS icd10 mappings table
+# make complete CCS icd10 mappings table
 icd10_ccs <- icd10_ccs %>%
   mutate(icd_chp_code = NA,
          icd_chp_code = ifelse(icd_code <= 'B99', 1, NA),
@@ -222,11 +165,26 @@ icd10_ccs <- icd10_ccs %>%
          ccs1_desc = ifelse(ccs1_desc == 'Mental illness', 'Mental Illness', ccs1_desc),
          ccs1 = paste0(ccs1_code, ' - ', ccs1_desc),
          ccs2 = paste0(ccs2_code, ' - ', ccs2_desc))
-# TODO: add phewas to this.
 
 
 
 #-----------------------------ICD9-----------------------------#
+
+# icd9 : ccs - icd9 chapter
+icd9_ccs_multi <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_multi_2015.csv'), col_types = c('ccccccccc'))
+icd9_ccs_single <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2015.csv'))
+icd9_ccs_desc <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2013.csv'))
+icd9_chap <- read_csv(paste0(raw_datadir, 'icd_grouping/icd9_chapters.csv'))
+
+names(mimic_diag) <- tolower(names(mimic_diag))
+names(mimic_diag)[5] <- 'icd_code'
+names(mimic_icd9) <- tolower(names(mimic_icd9))
+names(mimic_icd9)[2] <- 'icd_code'
+names(mimic_admit) <- tolower(names(mimic_admit))
+names(mimic_patients) <- tolower(names(mimic_patients))
+names(icd9_ccs_multi) <- c('icd_code', 'lvl1_cd', 'lvl1_desc', 'lvl2_cd', 'lvl2_desc', 'lvl3_cd', 'lvl3_desc', 'lvl4_cd', 'lvl4_desc')
+names(icd9_ccs_single) <- c('icd_code', 'ccs_cat', 'ccs_desc', 'icd_desc', 'ccs_opt_cat', 'cch_opt_desc')
+names(icd9_ccs_desc) <- c('ccs_cat', 'ccs_full_desc')
 
 ### replace NA's in ccs_multi with previous category description
 icd9_ccs_multi$lvl2_cd[is.na(icd9_ccs_multi$lvl2_cd)] <- icd9_ccs_multi$lvl1_cd[is.na(icd9_ccs_multi$lvl2_cd)]
@@ -252,12 +210,6 @@ icd9_chap <- icd9_chap %>%
   inner_join(mp, by = 'icd_chp')
 
 
-### TOFIX: needs some work!
-# check for NAs
-# check for exact match between icd9 codes and phewas cats
-icd9_phewas <- icd9_phewas %>%
-  mutate(icd9 = gsub('\\.',  '', icd9))
-
 ### CCS icd9 mappings table
 icd9_ccs <- icd9_ccs_multi %>% 
   # add icd9 codes and long titles
@@ -268,19 +220,8 @@ icd9_ccs <- icd9_ccs_multi %>%
   select(icd_code, long_title, ccs_cat, ccs_desc, lvl1_cd, lvl1_desc, lvl2_cd, lvl2_desc, lvl3_cd, lvl3_desc) %>%
   # add icd9 chapters
   inner_join(icd9_chap, by = c('icd_code' = 'icd')) %>%
-  select(icd_code, long_title, ccs_cat, ccs_desc, lvl1_cd, lvl1_desc, lvl2_cd, lvl2_desc, lvl3_cd, lvl3_desc, icd_chp, icd_c) %>%
-  # TOFIX: ICD-9 codes in phewas do not match with ICD-9 codes found in all other files - causing NAs later down the line
-  # TODO: add pregnancy?, sex?, what is category/category_string? is it ICD9 chapters? it is close to chapters, but not quite.
-  # there are 19 icd9 chatpers, but only 18 phewas categories. also, one phewas category is "-". ignore this.
-  left_join(icd9_phewas, by = c('icd_code' = 'icd9')) %>%
-  select(icd_code = icd_code, icd_desc = long_title, 
-         ccs_code = ccs_cat, ccs_desc, 
-         ccs1_code = lvl1_cd, ccs1_desc = lvl1_desc, 
-         ccs2_code = lvl2_cd, ccs2_desc = lvl2_desc, 
-         ccs3_code = lvl3_cd, ccs3_desc = lvl3_desc, 
-         icd_chp_code = icd_c, icd_chp_desc = icd_chp,
-         phewas_code, phewas_desc = phewas_string) %>%
-  
+  select(icd_code, icd_desc = long_title, ccs_code = ccs_cat, ccs_desc, ccs1_code = lvl1_cd, ccs1_desc = lvl1_desc, ccs2_code = lvl2_cd, ccs2_desc = lvl2_desc, ccs3_code = lvl3_cd, ccs3_desc = lvl3_desc, 
+         icd_chp_code = icd_c, icd_chp_desc = icd_chp) %>%
   # create new columns to be used in dropdown menus for readability
   mutate(icd = paste0(icd_code, ' - ', icd_desc),
          icd_c = paste0(icd_chp_code, ' - ', icd_chp_desc),
@@ -289,8 +230,21 @@ icd9_ccs <- icd9_ccs_multi %>%
          ccs1 = paste0(ccs1_code, ' - ', ccs1_desc),
          ccs2 = paste0(ccs2_code, ' - ', ccs2_desc),
          ccs3 = paste0(ccs3_code, ' - ', ccs3_desc),
-         phewas = paste0(phewas_code, ' - ', phewas_desc),
          ccs_code = as.character(ccs_code),
          icd_chp_code = as.character(icd_chp_code)
          )
 
+
+
+######################
+# pull processed data
+######################
+
+mimic_base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
+mimic_base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
+
+cdc_base_temporal <- read_csv(paste0(csv_dir, 'cdc_temporal.txt'), col_names = F)
+cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_names = F)
+
+#aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal.txt'), col_names = F)
+#aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics.txt'), col_names = F)

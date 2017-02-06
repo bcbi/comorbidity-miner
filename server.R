@@ -8,49 +8,47 @@
 
 shinyServer(function(input, output, session) {
 
-######################
-# data transformations
-######################
-
-# read in pre-processed data from CSV
-# TODO: add a switch for different data sets with input$data == 'fname'
-base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
-base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
-
-names(base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
-names(base_demographics)[1] <- 'subject_id'
-
-# transform data using tidyr so that each condition gets it's own row
-tidy_temporal <- base_temporal %>%
-  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
-  unnest(icd_code)
-
-# add switch for icd9 vs icd10 and join tidy data sets with ccs mapping tables
-categs <- reactive({
-  if(input$icd_version == 'icd9') {
-    return(icd9_ccs)
-    # tidy_temporal_cats <- tidy_temporal %>%
-    #   left_join(icd9_ccs, by = "icd_code")
-  }
-  else if(input$icd_version == 'icd10') {
-    return(icd10_ccs)
-    # tidy_temporal_cats <- tidy_temporal %>%
-    #   left_join(icd10_ccs, by = "icd_code")
-  }
-})
-
 
 ######################################################
 # cohort selection
 # search by ICD codes, ICD chapters, or CCS categories
 ######################################################
+mapping <- reactive({
+  if(input$data_src == 'mimic') {
+    return(icd9_ccs)
+  } else if(input$data_src == 'cdc_mortality') {
+    return(icd10_ccs)
+  } else if(input$data_src == 'aeolus') {
+    return(icd9_ccs)
+  }
+})
+  
 
 # get cohort temporal, association, and demographics datasets
 get_cohort <- reactive({
   
+  if(input$data_src == 'mimic') {
+    base_temporal <- mimic_base_temporal
+    base_demographics <- mimic_base_demographics
+  } else if(input$data_src == 'cdc_mortality') {
+    base_temporal <- cdc_base_temporal
+    base_demographics <- cdc_base_demographics
+  } else if(input$data_src == 'aeolus') {
+    base_temporal <- aeolus_base_temporal
+    base_demographics <- aeolus_base_demographics
+  }
+  
+  names(base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+  names(base_demographics)[1] <- 'subject_id'
+  
+  # transform data using tidyr so that each condition gets it's own row
+  tidy_temporal <- base_temporal %>%
+    mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+    unnest(icd_code)
+  
   # add all categories to tidy temporal
   tidy_temporal_cats <- tidy_temporal %>%
-    left_join(categs(), by = 'icd_code')
+    left_join(mapping(), by = 'icd_code')
   
   # select primary condition
   base_cohort <- tidy_temporal_cats %>%
@@ -58,9 +56,7 @@ get_cohort <- reactive({
            else if(input$grouping_lvl == 'icd_c') {icd_chp_code == gsub(' - .*', '', input$code)}
            else if(input$grouping_lvl == 'ccs_s') {ccs_code == gsub(' - .*', '', input$code)}
            else if(input$grouping_lvl == 'ccs1') {ccs1_code == gsub(' - .*', '', input$code)}
-           else if(input$grouping_lvl == 'ccs2') {ccs2_code == gsub(' - .*', '', input$code)}
-           else if(input$grouping_lvl == 'ccs3') {ccs3_code == gsub(' - .*', '', input$code)}
-           else if(input$grouping_lvl == 'phewas') {phewas_code == gsub(' - .*', '', input$code)}) %>%
+           else if(input$grouping_lvl == 'ccs2') {ccs2_code == gsub(' - .*', '', input$code)}) %>%
     filter(if(input$min_two_visits == T) {admit_id > 1}) %>%
     distinct(subject_id, .keep_all = T) %>%
     select(subject_id)
@@ -72,9 +68,7 @@ get_cohort <- reactive({
            else if(input$grouping_lvl2 == 'icd_c') {icd_chp_code == gsub(' - .*', '', input$code2)}
            else if(input$grouping_lvl2 == 'ccs_s') {ccs_code == gsub(' - .*', '', input$code2)}
            else if(input$grouping_lvl2 == 'ccs1') {ccs1_code == gsub(' - .*', '', input$code2)}
-           else if(input$grouping_lvl2 == 'ccs2') {ccs2_code == gsub(' - .*', '', input$code2)}
-           else if(input$grouping_lvl2 == 'ccs3') {ccs3_code == gsub(' - .*', '', input$code2)}
-           else if(input$grouping_lvl2 == 'phewas') {phewas_code == gsub(' - .*', '', input$code2)}) %>%
+           else if(input$grouping_lvl2 == 'ccs2') {ccs2_code == gsub(' - .*', '', input$code2)}) %>%
     distinct(subject_id, .keep_all = T) %>%
     select(subject_id)
   
@@ -83,11 +77,11 @@ get_cohort <- reactive({
     anti_join(cohort_plus, by = 'subject_id')
   
   # select primary and secondary condition interaction
-  if(input$interaction == 'Condition 1 + 2') {cohort <- cohort_plus}
-  else if(input$interaction == 'Condition 1 - 2') {cohort <- cohort_minus}
+  if(input$interaction == 'Condition 1 + Condition 2') {cohort <- cohort_plus}
+  else if(input$interaction == 'Condition 1 - Condition 2') {cohort <- cohort_minus}
   
   #------------------------get patient's diagnosis codes and demographics------------------------#
-  # patients and their unique icd-9 codes
+  # patients and their unique icd codes
   unique_icd <- cohort %>%
     inner_join(tidy_temporal, by = 'subject_id') %>%
     distinct(subject_id, icd_code, .keep_all = T) %>%
@@ -99,61 +93,86 @@ get_cohort <- reactive({
     distinct(subject_id, .keep_all = T) 
   
   # temporal
-  # TODO: add another if condition for icd9 vs icd10
   if(input$seq_grp_lvl == 'icd') {
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(icd_code, ',', ' '))) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_code, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
+      summarise_each(funs(paste(., collapse = ',')))
+    association <- cohort %>%
+      inner_join(tidy_temporal_cats, by = "subject_id") %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_desc, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      select(subject_id, admit_id, cat) %>%
+      group_by(subject_id, admit_id) %>%
+      summarise_each(funs(paste(., collapse = ','))) %>%
+      select(subject_id, cat)}
   else if(input$seq_grp_lvl == 'icd_c') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_code, ',', ' '))) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_code, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
+      summarise_each(funs(paste(., collapse = ',')))
+    association <- cohort %>%
+      inner_join(tidy_temporal_cats, by = "subject_id") %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_desc, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      select(subject_id, admit_id, cat) %>%
+      group_by(subject_id, admit_id) %>%
+      summarise_each(funs(paste(., collapse = ','))) %>%
+      select(subject_id, cat)}
   else if(input$seq_grp_lvl == 'ccs_s') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs_code, ',', ' '))) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs_code, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
+      summarise_each(funs(paste(., collapse = ',')))
+    association <- cohort %>%
+      inner_join(tidy_temporal_cats, by = "subject_id") %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs_desc, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      select(subject_id, admit_id, cat) %>%
+      group_by(subject_id, admit_id) %>%
+      summarise_each(funs(paste(., collapse = ','))) %>%
+      select(subject_id, cat)}
   else if(input$seq_grp_lvl == 'ccs1') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs1_code, ',', ' '))) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs1_code, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
+      summarise_each(funs(paste(., collapse = ',')))
+    association <- cohort %>%
+      inner_join(tidy_temporal_cats, by = "subject_id") %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs1_desc, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      select(subject_id, admit_id, cat) %>%
+      group_by(subject_id, admit_id) %>%
+      summarise_each(funs(paste(., collapse = ','))) %>%
+      select(subject_id, cat)}
   else if(input$seq_grp_lvl == 'ccs2') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs2_code, ',', ' '))) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs2_code, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
-  else if(input$seq_grp_lvl == 'ccs3') {        
-    temporal <- cohort %>%
+      summarise_each(funs(paste(., collapse = ',')))
+    association <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs3_code, ',', ' '))) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs2_desc, ',', ' ')),
+             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
-  else if(input$seq_grp_lvl == 'phewas') {        
-    temporal <- cohort %>%
-      inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(phewas_code, ',', ' '))) %>%
-      select(subject_id, admit_id, cat) %>%
-      group_by(subject_id, admit_id) %>%
-      summarise_each(funs(paste(., collapse = ',')))}
-
-
-  # association 
-  association <- temporal %>%
-    select(subject_id, cat)
+      summarise_each(funs(paste(., collapse = ','))) %>%
+      select(subject_id, cat)}
 
   list(unique_icd = unique_icd, demographics = demographics, temporal = temporal, association = association)
 })
@@ -165,10 +184,10 @@ get_cohort <- reactive({
 
 observeEvent(input$genData, {
   # write temporal and association to ./data/input/ folder (for input into SPADE and APRIORI algorithms)
-  f_name_1 <- ifelse(input$interaction == 'Condition 1 + 2', 
+  f_name_1 <- ifelse(input$interaction == 'Condition 1 + Condition 2', 
                      paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_temporal.txt'),
                      paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_temporal.txt'))
-  f_name_2 <- ifelse(input$interaction == 'Condition 1 + 2',
+  f_name_2 <- ifelse(input$interaction == 'Condition 1 + Condition 2',
                      paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_association.txt'),
                      paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_association.txt'))
   write.table(get_cohort()$temporal, f_name_1, quote = FALSE, sep = ',', row.names = FALSE, col.names = FALSE)
@@ -216,19 +235,13 @@ output$demographicsTable <- renderDataTable({
 
 
 ###################################################
-# creates reactive table of icd ccs phewas mappings
+# creates reactive table of icd ccs mappings
 ###################################################
 
 output$outGroupTable <- renderDataTable({
-  if(input$icd_version == 'icd9') {
-    datatable(outGroup <- categs() %>%
+    datatable(outGroup <- mapping() %>%
                 mutate(),
               rownames = F)
-  } else if(input$icd_version == 'icd10') {
-    datatable(outGroup <- categs() %>% 
-                mutate(),
-              rownames = F)
-  }
 })
 
 
@@ -237,21 +250,17 @@ output$outGroupTable <- renderDataTable({
 ####################################################################################
 
 observe({
-  if(input$grouping_lvl == 'icd') {updateSelectInput(session, "code", choices = unique(categs()$icd))}
-  else if(input$grouping_lvl == 'icd_c') {updateSelectInput(session, "code", choices = unique(categs()$icd_c))}
-  else if(input$grouping_lvl == 'ccs_s') {updateSelectInput(session, "code", choices = unique(categs()$ccs_s))}
-  else if(input$grouping_lvl == 'ccs1') {updateSelectInput(session, "code", choices = unique(categs()$ccs1))}
-  else if(input$grouping_lvl == 'ccs2') {updateSelectInput(session, "code", choices = unique(categs()$ccs2))}
-  else if(input$grouping_lvl == 'ccs3') {updateSelectInput(session, "code", choices = unique(categs()$ccs3))}
-  else if(input$grouping_lvl == 'phewas') {updateSelectInput(session, "code", choices = unique(categs()$phewas))}
+  if(input$grouping_lvl == 'icd') {updateSelectInput(session, "code", choices = unique(mapping()$icd))}
+  else if(input$grouping_lvl == 'icd_c') {updateSelectInput(session, "code", choices = unique(mapping()$icd_c))}
+  else if(input$grouping_lvl == 'ccs_s') {updateSelectInput(session, "code", choices = unique(mapping()$ccs_s))}
+  else if(input$grouping_lvl == 'ccs1') {updateSelectInput(session, "code", choices = unique(mapping()$ccs1))}
+  else if(input$grouping_lvl == 'ccs2') {updateSelectInput(session, "code", choices = unique(mapping()$ccs2))}
 
-  if(input$grouping_lvl2 == 'icd') {updateSelectInput(session, "code2", choices = unique(categs()$icd))}
-  else if(input$grouping_lvl2 == 'icd_c') {updateSelectInput(session, "code2", choices = unique(categs()$icd_c))}
-  else if(input$grouping_lvl2 == 'ccs_s') {updateSelectInput(session, "code2", choices = unique(categs()$ccs_s))}
-  else if(input$grouping_lvl2 == 'ccs1') {updateSelectInput(session, "code2", choices = unique(categs()$ccs1))}
-  else if(input$grouping_lvl2 == 'ccs2') {updateSelectInput(session, "code2", choices = unique(categs()$ccs2))}
-  else if(input$grouping_lvl2 == 'ccs3') {updateSelectInput(session, "code2", choices = unique(categs()$ccs3))}
-  else if(input$grouping_lvl2 == 'phewas') {updateSelectInput(session, "code2", choices = unique(categs()$phewas))}
+  if(input$grouping_lvl2 == 'icd') {updateSelectInput(session, "code2", choices = unique(mapping()$icd))}
+  else if(input$grouping_lvl2 == 'icd_c') {updateSelectInput(session, "code2", choices = unique(mapping()$icd_c))}
+  else if(input$grouping_lvl2 == 'ccs_s') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs_s))}
+  else if(input$grouping_lvl2 == 'ccs1') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs1))}
+  else if(input$grouping_lvl2 == 'ccs2') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs2))}
 })
 
 
@@ -264,7 +273,7 @@ observe({
 get_seqs <- reactive({
   
   #---------------------------------------cSPADE---------------------------------------#
-  fname <- ifelse(input$interaction == 'Condition 1 + 2',
+  fname <- ifelse(input$interaction == 'Condition 1 + Condition 2',
          paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_temporal.txt'),
          paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_temporal.txt'))
   
@@ -405,179 +414,131 @@ get_seqs <- reactive({
   #--------------------re-format sequences output--------------------#
   ### replace codes with descriptions
   if(len == 3) {
-    if(input$seq_grp_lvl == 'icd') {
-    seqdf <- seqdf %>%
-      left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
-      select(sequence, support, c_1 = icd_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_2' = 'icd_code')) %>%
-      select(sequence, support, c_1, c_2 = icd_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_3' = 'icd_code')) %>%
-      select(sequence, support, c_1, c_2, c_3 = icd_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_4' = 'icd_code')) %>%
-      select(sequence, support, c_1, c_2, c_3, c_4 = icd_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if(input$seq_grp_lvl == 'icd_c') {
+      if(input$seq_grp_lvl == 'icd') {
       seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_1' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1 = icd_chp_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1, c_2 = icd_chp_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_3' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = icd_chp_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_4' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1, c_2, c_3, c_4 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if(input$seq_grp_lvl == 'ccs_s') {
-    seqdf <- seqdf %>%
-      left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
-      select(sequence, support, c_1 = ccs_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_2' = 'ccs_code')) %>%
-      select(sequence, support, c_1, c_2 = ccs_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_3' = 'ccs_code')) %>%
-      select(sequence, support, c_1, c_2, c_3 = ccs_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_4' = 'ccs_code')) %>%
-      select(sequence, support, c_1, c_2, c_3, c_4 = ccs_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if(input$seq_grp_lvl == 'ccs1') {
-    seqdf <- seqdf %>%
-      left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_1' = 'ccs1_code')) %>%
-      select(sequence, support, c_1 = ccs1_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_2' = 'ccs1_code')) %>%
-      select(sequence, support, c_1, c_2 = ccs1_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_3' = 'ccs1_code')) %>%
-      select(sequence, support, c_1, c_2, c_3 = ccs1_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_4' = 'ccs1_code')) %>%
-      select(sequence, support, c_1, c_2, c_3, c_4 = ccs1_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if(input$seq_grp_lvl == 'ccs2') {
-    seqdf <- seqdf %>%
-      left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_1' = 'ccs2_code')) %>%
-      select(sequence, support, c_1 = ccs2_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_2' = 'ccs2_code')) %>%
-      select(sequence, support, c_1, c_2 = ccs2_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_3' = 'ccs2_code')) %>%
-      select(sequence, support, c_1, c_2, c_3 = ccs2_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_4' = 'ccs2_code')) %>%
-      select(sequence, support, c_1, c_2, c_3, c_4 = ccs2_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if(input$seq_grp_lvl == 'ccs3') {
-    seqdf <- seqdf %>%
-      left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_1' = 'ccs3_code')) %>%
-      select(sequence, support, c_1 = ccs3_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_2' = 'ccs3_code')) %>%
-      select(sequence, support, c_1, c_2 = ccs3_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_3' = 'ccs3_code')) %>%
-      select(sequence, support, c_1, c_2, c_3 = ccs3_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_4' = 'ccs3_code')) %>%
-      select(sequence, support, c_1, c_2, c_3, c_4 = ccs3_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if(input$seq_grp_lvl == 'phewas') {
-    seqdf <- seqdf %>%
-      left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_1' = 'phewas_code')) %>%
-      select(sequence, support, c_1 = phewas_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_2' = 'phewas_code')) %>%
-      select(sequence, support, c_1, c_2 = phewas_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_3' = 'phewas_code')) %>%
-      select(sequence, support, c_1, c_2, c_3 = phewas_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-      left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_4' = 'phewas_code')) %>%
-      select(sequence, support, c_1, c_2, c_3, c_4 = phewas_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-  }
-  } else if(len == 2) {
-    if(input$seq_grp_lvl == 'icd') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
-        select(sequence, support, c_1 = icd_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_2' = 'icd_code')) %>%
-        select(sequence, support, c_1, c_2 = icd_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_3' = 'icd_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = icd_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+        left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
+        select(sequence, support, c_1 = icd_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_2' = 'icd_code')) %>%
+        select(sequence, support, c_1, c_2 = icd_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_3' = 'icd_code')) %>%
+        select(sequence, support, c_1, c_2, c_3 = icd_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_4' = 'icd_code')) %>%
+        select(sequence, support, c_1, c_2, c_3, c_4 = icd_desc, length, consec, non_consec, embed_consec, embed_non_consec)
     } else if(input$seq_grp_lvl == 'icd_c') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_1' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1 = icd_chp_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1, c_2 = icd_chp_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_3' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_1' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1 = icd_chp_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1, c_2 = icd_chp_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_3' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1, c_2, c_3 = icd_chp_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_4' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1, c_2, c_3, c_4 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec)
     } else if(input$seq_grp_lvl == 'ccs_s') {
       seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
-        select(sequence, support, c_1 = ccs_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_2' = 'ccs_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_3' = 'ccs_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = ccs_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
+        left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
+        select(sequence, support, c_1 = ccs_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_2' = 'ccs_code')) %>%
+        select(sequence, support, c_1, c_2 = ccs_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_3' = 'ccs_code')) %>%
+        select(sequence, support, c_1, c_2, c_3 = ccs_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_4' = 'ccs_code')) %>%
+        select(sequence, support, c_1, c_2, c_3, c_4 = ccs_desc, length, consec, non_consec, embed_consec, embed_non_consec)
     } else if(input$seq_grp_lvl == 'ccs1') {
       seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_1' = 'ccs1_code')) %>%
-        select(sequence, support, c_1 = ccs1_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_2' = 'ccs1_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs1_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_3' = 'ccs1_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = ccs1_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
+        left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_1' = 'ccs1_code')) %>%
+        select(sequence, support, c_1 = ccs1_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_2' = 'ccs1_code')) %>%
+        select(sequence, support, c_1, c_2 = ccs1_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_3' = 'ccs1_code')) %>%
+        select(sequence, support, c_1, c_2, c_3 = ccs1_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_4' = 'ccs1_code')) %>%
+        select(sequence, support, c_1, c_2, c_3, c_4 = ccs1_desc, length, consec, non_consec, embed_consec, embed_non_consec)
     } else if(input$seq_grp_lvl == 'ccs2') {
       seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_1' = 'ccs2_code')) %>%
-        select(sequence, support, c_1 = ccs2_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_2' = 'ccs2_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs2_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_3' = 'ccs2_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = ccs2_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    } else if(input$seq_grp_lvl == 'ccs3') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_1' = 'ccs3_code')) %>%
-        select(sequence, support, c_1 = ccs3_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_2' = 'ccs3_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs3_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_3' = 'ccs3_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = ccs3_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    } else if(input$seq_grp_lvl == 'phewas') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_1' = 'phewas_code')) %>%
-        select(sequence, support, c_1 = phewas_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_2' = 'phewas_code')) %>%
-        select(sequence, support, c_1, c_2 = phewas_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_3' = 'phewas_code')) %>%
-        select(sequence, support, c_1, c_2, c_3 = phewas_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    }
+        left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_1' = 'ccs2_code')) %>%
+        select(sequence, support, c_1 = ccs2_desc, c_2, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_2' = 'ccs2_code')) %>%
+        select(sequence, support, c_1, c_2 = ccs2_desc, c_3, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_3' = 'ccs2_code')) %>%
+        select(sequence, support, c_1, c_2, c_3 = ccs2_desc, c_4, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+        left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_4' = 'ccs2_code')) %>%
+        select(sequence, support, c_1, c_2, c_3, c_4 = ccs2_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+      } 
+    } else if(len == 2) {
+      if(input$seq_grp_lvl == 'icd') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
+          select(sequence, support, c_1 = icd_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_2' = 'icd_code')) %>%
+          select(sequence, support, c_1, c_2 = icd_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_3' = 'icd_code')) %>%
+          select(sequence, support, c_1, c_2, c_3 = icd_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+      } else if(input$seq_grp_lvl == 'icd_c') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_1' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1 = icd_chp_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1, c_2 = icd_chp_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_3' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1, c_2, c_3 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+      } else if(input$seq_grp_lvl == 'ccs_s') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
+          select(sequence, support, c_1 = ccs_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_2' = 'ccs_code')) %>%
+          select(sequence, support, c_1, c_2 = ccs_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_3' = 'ccs_code')) %>%
+          select(sequence, support, c_1, c_2, c_3 = ccs_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
+      } else if(input$seq_grp_lvl == 'ccs1') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_1' = 'ccs1_code')) %>%
+          select(sequence, support, c_1 = ccs1_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_2' = 'ccs1_code')) %>%
+          select(sequence, support, c_1, c_2 = ccs1_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_3' = 'ccs1_code')) %>%
+          select(sequence, support, c_1, c_2, c_3 = ccs1_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
+      } else if(input$seq_grp_lvl == 'ccs2') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_1' = 'ccs2_code')) %>%
+          select(sequence, support, c_1 = ccs2_desc, c_2, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_2' = 'ccs2_code')) %>%
+          select(sequence, support, c_1, c_2 = ccs2_desc, c_3, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_3' = 'ccs2_code')) %>%
+          select(sequence, support, c_1, c_2, c_3 = ccs2_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+        }
   } else if(len == 1) {
-    if(input$seq_grp_lvl == 'icd') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
-        select(sequence, support, c_1 = icd_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_code, icd_desc)), by = c('c_2' = 'icd_code')) %>%
-        select(sequence, support, c_1, c_2 = icd_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-    } else if(input$seq_grp_lvl == 'icd_c') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_1' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1 = icd_chp_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
-        select(sequence, support, c_1, c_2 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    } else if(input$seq_grp_lvl == 'ccs_s') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
-        select(sequence, support, c_1 = ccs_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs_code, ccs_desc)), by = c('c_2' = 'ccs_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-    } else if(input$seq_grp_lvl == 'ccs1') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_1' = 'ccs1_code')) %>%
-        select(sequence, support, c_1 = ccs1_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs1_code, ccs1_desc)), by = c('c_2' = 'ccs1_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs1_desc, length, consec, non_consec, embed_consec, embed_non_consec)
-    } else if(input$seq_grp_lvl == 'ccs2') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_1' = 'ccs2_code')) %>%
-        select(sequence, support, c_1 = ccs2_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs2_code, ccs2_desc)), by = c('c_2' = 'ccs2_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs2_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    } else if(input$seq_grp_lvl == 'ccs3') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_1' = 'ccs3_code')) %>%
-        select(sequence, support, c_1 = ccs3_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), ccs3_code, ccs3_desc)), by = c('c_2' = 'ccs3_code')) %>%
-        select(sequence, support, c_1, c_2 = ccs3_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    } else if(input$seq_grp_lvl == 'phewas') {
-      seqdf <- seqdf %>%
-        left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_1' = 'phewas_code')) %>%
-        select(sequence, support, c_1 = phewas_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
-        left_join(distinct(select(categs(), phewas_code, phewas_desc)), by = c('c_2' = 'phewas_code')) %>%
-        select(sequence, support, c_1, c_2 = phewas_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
-    }
+      if(input$seq_grp_lvl == 'icd') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
+          select(sequence, support, c_1 = icd_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_2' = 'icd_code')) %>%
+          select(sequence, support, c_1, c_2 = icd_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+      } else if(input$seq_grp_lvl == 'icd_c') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_1' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1 = icd_chp_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), icd_chp_code, icd_chp_desc)), by = c('c_2' = 'icd_chp_code')) %>%
+          select(sequence, support, c_1, c_2 = icd_chp_desc, length, consec, non_consec, embed_consec, embed_non_consec) 
+      } else if(input$seq_grp_lvl == 'ccs_s') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_1' = 'ccs_code')) %>%
+          select(sequence, support, c_1 = ccs_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs_code, ccs_desc)), by = c('c_2' = 'ccs_code')) %>%
+          select(sequence, support, c_1, c_2 = ccs_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+      } else if(input$seq_grp_lvl == 'ccs1') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_1' = 'ccs1_code')) %>%
+          select(sequence, support, c_1 = ccs1_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs1_code, ccs1_desc)), by = c('c_2' = 'ccs1_code')) %>%
+          select(sequence, support, c_1, c_2 = ccs1_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+      } else if(input$seq_grp_lvl == 'ccs2') {
+        seqdf <- seqdf %>%
+          left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_1' = 'ccs2_code')) %>%
+          select(sequence, support, c_1 = ccs2_desc, c_2, length, consec, non_consec, embed_consec, embed_non_consec) %>%
+          left_join(distinct(select(mapping(), ccs2_code, ccs2_desc)), by = c('c_2' = 'ccs2_code')) %>%
+          select(sequence, support, c_1, c_2 = ccs2_desc, length, consec, non_consec, embed_consec, embed_non_consec)
+        } 
   }
   
   #--------------------filter sequences--------------------#
@@ -708,7 +669,7 @@ output$sankey <- renderGvis({
 ### Association Rules
 rules <- reactive({
  # get filename
-  fname <- ifelse(input$interaction == 'Condition 1 + 2',
+  fname <- ifelse(input$interaction == 'Condition 1 + Condition 2',
                   paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_association.txt'),
                   paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_association.txt'))  
   
