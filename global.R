@@ -30,6 +30,7 @@ library(arulesSequences)
 library(stringi)
 library(stringr)
 library(DT)
+library(ggplot2)
 
 # set source as 'CSV' or 'DB', set raw and pre-processed data directories
 src <- 'CSV'
@@ -242,9 +243,35 @@ icd9_ccs <- icd9_ccs_multi %>%
 
 mimic_base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
 mimic_base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
+names(mimic_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+names(mimic_base_demographics) <- c('subject_id', 'age', 'age_dod', 'sex_at_birth', 'expire_flag', 
+                                    'admit_type', 'admit_location', 'insurance', 'language', 'religion', 'marital', 'ethnicity', 'hospital_expire_flag')
 
 cdc_base_temporal <- read_csv(paste0(csv_dir, 'cdc_temporal.txt'), col_names = F)
 cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_names = F)
+names(cdc_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+names(cdc_base_demographics) <- c('subject_id', 'citizenship', 'education1', 'education2', 'sex_at_birth', 'age_group', 'age_infant', 'marital', 'race', 'hispanic')
 
 #aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal.txt'), col_names = F)
 #aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics.txt'), col_names = F)
+#names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+#names(aeolus_base_demographics)[1] <- 'subject_id'
+
+
+# transform data using tidyr so that each condition gets it's own row
+mimic_tidy_temporal <- mimic_base_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code)
+cdc_tidy_temporal <- mimic_base_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code)
+
+
+
+
+######################
+# rm dataframes
+######################
+
+rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap,
+   mimic_admit, mimic_diag, mimic_icd9, mimic_patients)

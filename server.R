@@ -13,42 +13,55 @@ shinyServer(function(input, output, session) {
 # cohort selection
 # search by ICD codes, ICD chapters, or CCS categories
 ######################################################
+# data source determines appropriate mapping dataframe
 mapping <- reactive({
   if(input$data_src == 'mimic') {
     return(icd9_ccs)
   } else if(input$data_src == 'cdc_mortality') {
     return(icd10_ccs)
   } else if(input$data_src == 'aeolus') {
-    return(icd9_ccs)
+    return(icd10_ccs)
   }
+})
+
+
+# update Cohort Selection Input with user-selected ICD version and Grouping Category
+observe({
+  if(input$grouping_lvl == 'icd') {updateSelectInput(session, "code", choices = unique(mapping()$icd))}
+  else if(input$grouping_lvl == 'icd_c') {updateSelectInput(session, "code", choices = unique(mapping()$icd_c))}
+  else if(input$grouping_lvl == 'ccs_s') {updateSelectInput(session, "code", choices = unique(mapping()$ccs_s))}
+  else if(input$grouping_lvl == 'ccs1') {updateSelectInput(session, "code", choices = unique(mapping()$ccs1))}
+  else if(input$grouping_lvl == 'ccs2') {updateSelectInput(session, "code", choices = unique(mapping()$ccs2))}
+  
+  if(input$grouping_lvl2 == 'icd') {updateSelectInput(session, "code2", choices = unique(mapping()$icd))}
+  else if(input$grouping_lvl2 == 'icd_c') {updateSelectInput(session, "code2", choices = unique(mapping()$icd_c))}
+  else if(input$grouping_lvl2 == 'ccs_s') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs_s))}
+  else if(input$grouping_lvl2 == 'ccs1') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs1))}
+  else if(input$grouping_lvl2 == 'ccs2') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs2))}
 })
   
 
-# get cohort temporal, association, and demographics datasets
+# get cohort by up to two conditions and create temporal, association, and demographics dataframes for further analysis
 get_cohort <- reactive({
   
   if(input$data_src == 'mimic') {
     base_temporal <- mimic_base_temporal
     base_demographics <- mimic_base_demographics
+    tidy_temporal <- mimic_tidy_temporal
   } else if(input$data_src == 'cdc_mortality') {
     base_temporal <- cdc_base_temporal
     base_demographics <- cdc_base_demographics
+    tidy_temporal <- cdc_tidy_temporal
   } else if(input$data_src == 'aeolus') {
     base_temporal <- aeolus_base_temporal
     base_demographics <- aeolus_base_demographics
+    tidy_temporal <- aeolus_tidy_temporal
   }
-  
-  names(base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
-  names(base_demographics)[1] <- 'subject_id'
-  
-  # transform data using tidyr so that each condition gets it's own row
-  tidy_temporal <- base_temporal %>%
-    mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
-    unnest(icd_code)
   
   # add all categories to tidy temporal
   tidy_temporal_cats <- tidy_temporal %>%
-    left_join(mapping(), by = 'icd_code')
+    left_join(mapping(), by = 'icd_code') %>%
+    mutate_all(funs(replace(., is.na(.), "UNRESOLVED")))
   
   # select primary condition
   base_cohort <- tidy_temporal_cats %>%
@@ -58,8 +71,7 @@ get_cohort <- reactive({
            else if(input$grouping_lvl == 'ccs1') {ccs1_code == gsub(' - .*', '', input$code)}
            else if(input$grouping_lvl == 'ccs2') {ccs2_code == gsub(' - .*', '', input$code)}) %>%
     filter(if(input$min_two_visits == T) {admit_id > 1}) %>%
-    distinct(subject_id, .keep_all = T) %>%
-    select(subject_id)
+    distinct(subject_id)
   
   # select secondary condition
   cohort_plus <- base_cohort %>%
@@ -69,8 +81,7 @@ get_cohort <- reactive({
            else if(input$grouping_lvl2 == 'ccs_s') {ccs_code == gsub(' - .*', '', input$code2)}
            else if(input$grouping_lvl2 == 'ccs1') {ccs1_code == gsub(' - .*', '', input$code2)}
            else if(input$grouping_lvl2 == 'ccs2') {ccs2_code == gsub(' - .*', '', input$code2)}) %>%
-    distinct(subject_id, .keep_all = T) %>%
-    select(subject_id)
+    distinct(subject_id)
   
   # cohort - secondary condition
   cohort_minus <- base_cohort %>% 
@@ -92,19 +103,17 @@ get_cohort <- reactive({
     inner_join(base_demographics, by = 'subject_id') %>%
     distinct(subject_id, .keep_all = T) 
   
-  # temporal
+  #------------------------create temporal and association dfs------------------------#
   if(input$seq_grp_lvl == 'icd') {
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(icd_code, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_code, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ',')))
     association <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(icd_desc, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_desc, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ','))) %>%
@@ -112,15 +121,13 @@ get_cohort <- reactive({
   else if(input$seq_grp_lvl == 'icd_c') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_code, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_code, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ',')))
     association <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_desc, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(icd_chp_desc, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ','))) %>%
@@ -128,15 +135,13 @@ get_cohort <- reactive({
   else if(input$seq_grp_lvl == 'ccs_s') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs_code, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs_code, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ',')))
     association <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs_desc, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs_desc, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ','))) %>%
@@ -144,15 +149,13 @@ get_cohort <- reactive({
   else if(input$seq_grp_lvl == 'ccs1') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs1_code, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs1_code, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ',')))
     association <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs1_desc, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs1_desc, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ','))) %>%
@@ -160,28 +163,24 @@ get_cohort <- reactive({
   else if(input$seq_grp_lvl == 'ccs2') {        
     temporal <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs2_code, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs2_code, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ',')))
     association <- cohort %>%
       inner_join(tidy_temporal_cats, by = "subject_id") %>%
-      mutate(cat = paste0(stri_replace_all_fixed(ccs2_desc, ',', ' ')),
-             cat = ifelse(is.na(cat), "Unknown", cat)) %>%
+      mutate(cat = paste0(stri_replace_all_fixed(ccs2_desc, ',', ' '))) %>%
       select(subject_id, admit_id, cat) %>%
       group_by(subject_id, admit_id) %>%
       summarise_each(funs(paste(., collapse = ','))) %>%
       select(subject_id, cat)}
 
-  list(unique_icd = unique_icd, demographics = demographics, temporal = temporal, association = association)
+  list(unique_icd = unique_icd, demographics = demographics, temporal = temporal, association = association, 
+       tidy_temporal_cats = tidy_temporal_cats, cohort = cohort)
 })
 
 
-#####################################################
 # write cohort to csv only when user selects "Submit"
-#####################################################
-
 observeEvent(input$genData, {
   # write temporal and association to ./data/input/ folder (for input into SPADE and APRIORI algorithms)
   f_name_1 <- ifelse(input$interaction == 'Condition 1 + Condition 2', 
@@ -195,34 +194,56 @@ observeEvent(input$genData, {
 })
 
 
-########################################################
-### add copy, print, and download buttons to data tables
-########################################################
 
-output$patientsTable <- renderDataTable({
-  datatable(
-    get_cohort()$unique_icd, 
-    extensions = 'Buttons', options = list(
-      dom = 'Bfrtip',
-      buttons = list('copy', 'print', list(
-        extend = 'collection',
-        buttons = 
-          list(list(extend='csv', filename = 'hitStats'),
-               list(extend='excel', filename = 'hitStats'),
-               list(extend='pdf', filename= 'hitStats')),
-        text = 'Download')),
-      scrollX = TRUE,
-      pageLength = nrow(get_cohort()$unique_icd),
-      order = list(list(1, 'asc'))
-    ), rownames = F)
+###################################################
+# explore all patients
+###################################################
+
+# mapping table
+output$outGroupTable <- renderDataTable({
+  datatable(outGroup <- mapping() %>%
+              mutate(),
+            rownames = F)
 })
 
+
+# codes histogram
+freqcodes <- reactive({
+  df <- get_cohort()$tidy_temporal_cats 
+  
+  if(input$seq_grp_lvl == 'icd') {df <- select(df, cat = icd_desc)}
+  else if(input$seq_grp_lvl == 'icd_c') {df <- select(df, cat = icd_chp_desc)}
+  else if(input$seq_grp_lvl == 'ccs_s') {df <- select(df, cat = ccs_desc)}
+  else if(input$seq_grp_lvl == 'ccs1') {df <- select(df, cat = ccs1_desc)}
+  else if(input$seq_grp_lvl == 'ccs2') {df <- select(df, cat = ccs2_desc)}
+  
+  df <- df %>%
+    group_by(cat) %>%
+    summarise(count = n()) %>%
+    top_n(20, count)
+})
+
+output$frequentCodesPlot <- renderPlot({
+  ggplot(freqcodes(), aes(reorder(cat, -table(cat)[cat]), count)) +
+    geom_bar(stat = 'identity') + 
+    coord_flip() +
+    ggtitle('Condition Frequencies') +
+    xlab('condition') + ylab('number occurrences')
+})
+
+
+
+########################################################
+# explore cohort
+########################################################
+
+# demographics
 output$demographicsTable <- renderDataTable({
   datatable(
-    get_cohort()$demographics, 
+    get_cohort()$demographics,
     extensions = 'Buttons', options = list(
       dom = 'Bfrtip',
-      buttons = 
+      buttons =
         list('copy', 'print', list(
           extend = 'collection',
           buttons = c('csv', 'excel', 'pdf'),
@@ -234,35 +255,56 @@ output$demographicsTable <- renderDataTable({
 })
 
 
-###################################################
-# creates reactive table of icd ccs mappings
-###################################################
-
-output$outGroupTable <- renderDataTable({
-    datatable(outGroup <- mapping() %>%
-                mutate(),
-              rownames = F)
+# output$patientsTable <- renderDataTable({
+#   datatable(
+#     get_cohort()$unique_icd, 
+#     extensions = 'Buttons', options = list(
+#       dom = 'Bfrtip',
+#       buttons = list('copy', 'print', list(
+#         extend = 'collection',
+#         buttons = 
+#           list(list(extend='csv', filename = 'hitStats'),
+#                list(extend='excel', filename = 'hitStats'),
+#                list(extend='pdf', filename= 'hitStats')),
+#         text = 'Download')),
+#       scrollX = TRUE,
+#       pageLength = nrow(get_cohort()$unique_icd),
+#       order = list(list(1, 'asc'))
+#     ), rownames = F)
+# })
+output$patientsTable <- renderDataTable({
+  datatable(get_cohort()$unique_icd)
 })
 
 
-####################################################################################
-# update Cohort Selection Input with user-selected ICD version and Grouping Category
-####################################################################################
+freqpatients <- reactive({
+  df <- get_cohort()$cohort %>%
+    left_join(get_cohort()$tidy_temporal_cats, by = "subject_id") 
+  
+  if(input$seq_grp_lvl == 'icd') { df <- df %>% select(subject_id, admit_id, cat = icd_desc) }
+  else if(input$seq_grp_lvl == 'icd_c') { df <- df %>% select(subject_id, admit_id, cat = icd_chp_desc) }
+  else if(input$seq_grp_lvl == 'ccs_s') { df <- df %>% select(subject_id, admit_id, cat = ccs_desc) }
+  else if(input$seq_grp_lvl == 'ccs1') { df <- df %>% select(subject_id, admit_id, cat = ccs1_desc) }
+  else if(input$seq_grp_lvl == 'ccs2') { df <- df %>% select(subject_id, admit_id, cat = ccs2_desc) }
 
-observe({
-  if(input$grouping_lvl == 'icd') {updateSelectInput(session, "code", choices = unique(mapping()$icd))}
-  else if(input$grouping_lvl == 'icd_c') {updateSelectInput(session, "code", choices = unique(mapping()$icd_c))}
-  else if(input$grouping_lvl == 'ccs_s') {updateSelectInput(session, "code", choices = unique(mapping()$ccs_s))}
-  else if(input$grouping_lvl == 'ccs1') {updateSelectInput(session, "code", choices = unique(mapping()$ccs1))}
-  else if(input$grouping_lvl == 'ccs2') {updateSelectInput(session, "code", choices = unique(mapping()$ccs2))}
-
-  if(input$grouping_lvl2 == 'icd') {updateSelectInput(session, "code2", choices = unique(mapping()$icd))}
-  else if(input$grouping_lvl2 == 'icd_c') {updateSelectInput(session, "code2", choices = unique(mapping()$icd_c))}
-  else if(input$grouping_lvl2 == 'ccs_s') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs_s))}
-  else if(input$grouping_lvl2 == 'ccs1') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs1))}
-  else if(input$grouping_lvl2 == 'ccs2') {updateSelectInput(session, "code2", choices = unique(mapping()$ccs2))}
+  df <- df %>%
+    distinct(cat, subject_id) %>%
+    group_by(cat) %>%
+    summarise(count = n()) %>%
+    top_n(20, count)
 })
 
+output$frequentPatientsPlot <- renderPlot({
+  ggplot(freqpatients(), aes(reorder(cat, -table(cat)[cat]), count)) +
+    geom_bar(stat = 'identity') + 
+    coord_flip() +
+    ggtitle('Cohort Condition Frequencies') +
+    xlab('condition') + ylab('number patients')
+})
+
+output$testTable <- renderDataTable({
+  datatable(freqpatients())
+})
 
 ######################
 # temporal

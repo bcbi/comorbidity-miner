@@ -20,11 +20,15 @@ shinyUI(dashboardPage(
       id = "sbMenu",
       
       menuItem(
-        "Data and Cohort Settings", tabName = "cohort"
+        "Settings", tabName = "settings"
       ),
       
       menuItem(
-        "Summary Tables", tabName = "table"
+        "Explore All Patients", tabName = "all_patients"
+      ),
+      
+      menuItem(
+        "Explore Cohort", tabName = "cohort_patients"
       ),
       
       menuItem(
@@ -43,7 +47,7 @@ shinyUI(dashboardPage(
   dashboardBody(
     tabItems(
       # cohort
-      tabItem("cohort",
+      tabItem("settings",
               
               fluidRow(
                 
@@ -132,12 +136,22 @@ shinyUI(dashboardPage(
               )
       ),
       
-      # summary tables
-      tabItem("table",
+      # all patients
+      tabItem("all_patients",
+              tabsetPanel(
+                tabPanel('ICD Mapping', dataTableOutput("outGroupTable")),
+                tabPanel('Condition Histogram', plotOutput("frequentCodesPlot"))
+                )
+              ),
+              
+      
+      # cohort patients
+      tabItem("cohort_patients",
               tabsetPanel(
                 tabPanel("Demographics", dataTableOutput("demographicsTable")),
-                tabPanel("Codes", dataTableOutput("patientsTable")),
-                tabPanel("ICD Mapping", dataTableOutput("outGroupTable")) 
+                tabPanel("All Unique Codes", dataTableOutput("patientsTable")),
+                tabPanel("Condition Histogram", plotOutput("frequentPatientsPlot")),
+                tabPanel("test temporal df", dataTableOutput('testTable'))
                 )
               ),
               
