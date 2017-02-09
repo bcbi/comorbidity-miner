@@ -20,7 +20,7 @@ mapping <- reactive({
   } else if(input$data_src == 'cdc_mortality') {
     return(icd10_ccs)
   } else if(input$data_src == 'aeolus') {
-    return(icd10_ccs)
+    return(icd9_ccs)
   }
 })
 

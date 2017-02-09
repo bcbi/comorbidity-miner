@@ -74,24 +74,24 @@ if (src == 'CSV') {
   
   #-----------------------------aeolus db-----------------------------#
   
-  aeolus <- src_mysql(dbname = 'aeolus', host = 'pbcbicit.services.brown.edu',
+  aeolus_db <- src_mysql(dbname = 'aeolus', host = 'pbcbicit.services.brown.edu',
                       user = 'bcbi_shared', password = 'rgi211JKJ3581')
+ 
+  # case_ids, drug_ids, outcome_ids (snomed)
+  aeolus_drug_outcome_drilldown <- tbl(aeolus_db, 'standard_drug_outcome_drilldown')
+  aeolus_drilldown <- filter(aeolus_drug_outcome_drilldown, !is.na(snomed_outcome_concept_id) )
+  aeolus_drilldown <- collect(aeolus_drilldown, n = 500000)
   
-  aeolus_concept <- collect(tbl(aeolus, 'concept'), n = Inf)
-  aeolus_case_drug <- collect(tbl(aeolus, 'standard_case_drug'), n = Inf)
-  aeolus_case_indication <- collect(tbl(aeolus, 'standard_case_indication'), n = Inf)
-  aeolus_case_outcome <- collect(tbl(aeolus, 'standard_case_outcome'), n = Inf)
-  aeolus_case_outcome_category <- collect(tbl(aeolus, 'standard_case_outcome_category'), n = Inf)
-  aeolus_drug_outcome_category <- collect(tbl(aeolus, 'standard_drug_outcome_category'), n = Inf)
-  aeolus_drug_outcome_contingency_table <- collect(tbl(aeolus, 'standard_drug_outcome_contingency_table'), n = Inf)
-  aeolus_drug_outcome_count <- collect(tbl(aeolus, 'standard_drug_outcome_count'), n = Inf)
-  aeolus_drug_outcome_drilldown <- collect(tbl(aeolus, 'standard_drug_outcome_drilldown'), n = Inf)
-  aeolus_drug_outcome_statistics <- collect(tbl(aeolus, 'standard_drug_outcome_statistics'), n = Inf)
-  aeolus_unique_all_case <- collect(tbl(aeolus, 'standard_unique_all_case'), n = Inf)
-  aeolus_vocab <- collect(tbl(aeolus, 'vocabulary'), n = Inf)
+  # case_ids, indication_ids (snomed)
+  aeolus_case_indication <- tbl(aeolus_db, 'standard_case_indication')
+  aeolus_indication <- filter(aeolus_case_indication, !is.na(snomed_indication_concept_id))
+  aeolus_indication <- collect(aeolus_indication, n = 500000)
+  
+  # concept mapping
+  aeolus_concept <- collect(tbl(aeolus_db, 'concept'), n = Inf)
+  
   
 }
-
 
 
 ########################
@@ -178,6 +178,8 @@ icd9_ccs_multi <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_multi_2015.
 icd9_ccs_single <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2015.csv'))
 icd9_ccs_desc <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2013.csv'))
 icd9_chap <- read_csv(paste0(raw_datadir, 'icd_grouping/icd9_chapters.csv'))
+icd9_snomedct1TO1 <- read_csv(paste0(raw_datadir, 'icd_grouping/ICD9CM_SNOMED_MAP_1TO1_201612.txt'))
+icd9_snomedct1TOM <- read_csv(paste0(raw_datadir, 'icd_grouping/ICD9CM_SNOMED_MAP_1TOM_201612.txt'))
 
 names(mimic_diag) <- tolower(names(mimic_diag))
 names(mimic_diag)[5] <- 'icd_code'
@@ -211,6 +213,8 @@ mp <- data.frame(cbind(mp, seq(1, length(mp), 1)))
 names(mp) <- c('icd_chp', 'icd_c')
 icd9_chap <- icd9_chap %>%
   inner_join(mp, by = 'icd_chp')
+
+### 
 
 
 ### CCS icd9 mappings table
@@ -276,7 +280,4 @@ cdc_tidy_temporal <- mimic_base_temporal %>%
 
 rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap,
    mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
-rm(aeolus_concept,aeolus_case_drug,aeolus_case_indication,aeolus_case_outcome,
-   aeolus_case_outcome_category,aeolus_drug_outcome_category,
-   aeolus_drug_outcome_contingency_table,aeolus_drug_outcome_count,aeolus_drug_outcome_drilldown,
-   aeolus_drug_outcome_statistics,aeolus_unique_all_case,aeolus_vocab)
+#rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept)
