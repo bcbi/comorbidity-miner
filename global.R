@@ -6,11 +6,13 @@
 # brown center for biomedical informatics |
 # ----------------------------------------|
 
-# global.R reads in the data sources, including ICD-9 and ICD-10 categories.
-# the preprocessing scripts found in ./scripts map the data sources to a generic format
-# the generic format works with both arules and arules sequences
+# global.R reads in the MIMIC and AEOLUS data sources from either csv or mysql databse, 
+# and ICD-9 and ICD-10 mapping files.
+# the preprocessing scripts found in ./scripts map the data sources to a generic format. 
+# additionally, the cdc script reads in the cdc data.
+# the preprocessing scripts must be run separately to generate the generic format CSV file.
+# the generic format works through the rest of the pipeline.
 
-# TODO: add CDC data from CSV, add AEOLUS data from DB
 
 ######################
 # setup
@@ -31,8 +33,9 @@ library(stringi)
 library(stringr)
 library(DT)
 library(ggplot2)
+library(RMySQL)
 
-# set source as 'CSV' or 'DB', set raw and pre-processed data directories
+# set source as 'CSV' or 'DB', set raw and pre-processed data directories if different
 src <- 'CSV'
 raw_datadir <- './data/'
 csv_dir <- './data/input/'
@@ -45,7 +48,7 @@ csv_dir <- './data/input/'
 
 if (src == 'CSV') {
   
-  #-----------------------------MIMIC-----------------------------#
+  #-----------------------------mimic csv-----------------------------#
   
   # ehr data
   mimic_diag <- read_csv(paste0(raw_datadir, 'mimic_tables/DIAGNOSES_ICD.csv.gz'), na = c('NA','','NULL','null'))
@@ -54,24 +57,10 @@ if (src == 'CSV') {
   mimic_patients <- read_csv(paste0(raw_datadir, 'mimic_tables/PATIENTS.csv.gz'), na = c('NA','','NULL','null'))
   
   
-  # #-----------------------------EMR ROBOTS-----------------------------#
-  # # for demo purposes? - no longer need this bc we can use CDC for public demo
-  # 
-  # # ehr data
-  # emrr_diag <- read_csv(paste0(raw_datadir, 'EMR-robots-100/AdmissionsDiagnosesCorePopulatedTable.txt.gz'), na = c('NA','','NULL','null'))
-  # emrr_admit <- read_csv(paste0(raw_datadir, 'EMR-robots-100/AdmissionsCorePopulatedTable.txt'), na = c('NA','','NULL','null'))
-  # emrr_patients <- read_csv(paste0(raw_datadir, 'EMR-robots-100/PatientCorePopulatedTable.txt'), na = c('NA','','NULL','null'))
- 
-  # names(emrr_diag) <- tolower(names(emrr_diag))
-  # names(emrr_admit) <- tolower(names(emrr_admit))
-  # names(emrr_patients) <- tolower(names(emrr_patients))
-  
-  
 } else if (src == 'DB') {
   
   #-----------------------------mimic db-----------------------------#
   
-  # TODO: test on SH, maybe add col names?
   mimic <- src_mysql(dbname = 'mimic', host = 'localhost',
                      user = 'mimic_user', password = 'mimic')
   
@@ -83,10 +72,23 @@ if (src == 'CSV') {
   icd9_ccs_single <- collect(tbl(mimic, 'd_icd_diagnoses_ccs_single'))
   icd9_ccs_desc <- collect(tbl(mimic, 'd_ccs_cat_single'))
   
-  
   #-----------------------------aeolus db-----------------------------#
-
-
+  
+  aeolus <- src_mysql(dbname = 'aeolus', host = 'pbcbicit.services.brown.edu',
+                      user = 'bcbi_shared', password = 'rgi211JKJ3581')
+  
+  aeolus_concept <- collect(tbl(aeolus, 'concept'), n = Inf)
+  aeolus_case_drug <- collect(tbl(aeolus, 'standard_case_drug'), n = Inf)
+  aeolus_case_indication <- collect(tbl(aeolus, 'standard_case_indication'), n = Inf)
+  aeolus_case_outcome <- collect(tbl(aeolus, 'standard_case_outcome'), n = Inf)
+  aeolus_case_outcome_category <- collect(tbl(aeolus, 'standard_case_outcome_category'), n = Inf)
+  aeolus_drug_outcome_category <- collect(tbl(aeolus, 'standard_drug_outcome_category'), n = Inf)
+  aeolus_drug_outcome_contingency_table <- collect(tbl(aeolus, 'standard_drug_outcome_contingency_table'), n = Inf)
+  aeolus_drug_outcome_count <- collect(tbl(aeolus, 'standard_drug_outcome_count'), n = Inf)
+  aeolus_drug_outcome_drilldown <- collect(tbl(aeolus, 'standard_drug_outcome_drilldown'), n = Inf)
+  aeolus_drug_outcome_statistics <- collect(tbl(aeolus, 'standard_drug_outcome_statistics'), n = Inf)
+  aeolus_unique_all_case <- collect(tbl(aeolus, 'standard_unique_all_case'), n = Inf)
+  aeolus_vocab <- collect(tbl(aeolus, 'vocabulary'), n = Inf)
   
 }
 
@@ -268,10 +270,13 @@ cdc_tidy_temporal <- mimic_base_temporal %>%
 
 
 
-
 ######################
 # rm dataframes
 ######################
 
 rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap,
    mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
+rm(aeolus_concept,aeolus_case_drug,aeolus_case_indication,aeolus_case_outcome,
+   aeolus_case_outcome_category,aeolus_drug_outcome_category,
+   aeolus_drug_outcome_contingency_table,aeolus_drug_outcome_count,aeolus_drug_outcome_drilldown,
+   aeolus_drug_outcome_statistics,aeolus_unique_all_case,aeolus_vocab)

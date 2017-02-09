@@ -60,6 +60,7 @@ get_cohort <- reactive({
   
   # add all categories to tidy temporal
   tidy_temporal_cats <- tidy_temporal %>%
+    mutate(subject_id = as.numeric(subject_id)) %>%
     left_join(mapping(), by = 'icd_code') %>%
     mutate_all(funs(replace(., is.na(.), "UNRESOLVED")))
   
@@ -88,8 +89,8 @@ get_cohort <- reactive({
     anti_join(cohort_plus, by = 'subject_id')
   
   # select primary and secondary condition interaction
-  if(input$interaction == 'Condition 1 + Condition 2') {cohort <- cohort_plus}
-  else if(input$interaction == 'Condition 1 - Condition 2') {cohort <- cohort_minus}
+  if(input$interaction == 'Condition 1 + Condition 2') {cohort <- cohort_plus %>% mutate(subject_id = as.numeric(subject_id))}
+  else if(input$interaction == 'Condition 1 - Condition 2') {cohort <- cohort_minus %>% mutate(subject_id = as.numeric(subject_id))}
   
   #------------------------get patient's diagnosis codes and demographics------------------------#
   # patients and their unique icd codes
@@ -279,7 +280,7 @@ output$patientsTable <- renderDataTable({
 
 freqpatients <- reactive({
   df <- get_cohort()$cohort %>%
-    left_join(get_cohort()$tidy_temporal_cats, by = "subject_id") 
+    left_join(get_cohort()$tidy_temporal_cats) 
   
   if(input$seq_grp_lvl == 'icd') { df <- df %>% select(subject_id, admit_id, cat = icd_desc) }
   else if(input$seq_grp_lvl == 'icd_c') { df <- df %>% select(subject_id, admit_id, cat = icd_chp_desc) }
