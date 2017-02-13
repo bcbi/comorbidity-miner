@@ -50,14 +50,24 @@ if (src == 'CSV') {
   
   #-----------------------------mimic csv-----------------------------#
   
-  # ehr data
   mimic_diag <- read_csv(paste0(raw_datadir, 'mimic_tables/DIAGNOSES_ICD.csv.gz'), na = c('NA','','NULL','null'))
   mimic_icd9 <- read_csv(paste0(raw_datadir, 'mimic_tables/D_ICD_DIAGNOSES.csv.gz'), na = c('NA','','NULL','null'))
   mimic_admit <- read_csv(paste0(raw_datadir, 'mimic_tables/ADMISSIONS.csv.gz'), na = c('NA','','NULL','null'))
   mimic_patients <- read_csv(paste0(raw_datadir, 'mimic_tables/PATIENTS.csv.gz'), na = c('NA','','NULL','null'))
   
+  #-----------------------------aeolus csv-----------------------------#
   
-} else if (src == 'DB') {
+  aeolus_concept <- read_tsv(paste0(raw_datadir, 'aeolus_v1/concept.tsv'), na = c('NA','','NULL','null','\\N','\\\\N'), 
+                             col_names = c('concept_id','concept_name','domain_id','vocabulary_id','concept_class_id','standard_concept',
+                               'concept_code','valid_start_date','valid_end_date','invalid_reason'))
+  aeolus_case_indication <- read_tsv(paste0(raw_datadir, 'aeolus_v1/standard_case_indication.tsv'), na = c('NA','','NULL','null','\\N','\\\\N'),
+                                     col_names = c('primaryid','isr','indi_drug_seq','indi_pt','indication_concept_id','snomed_indication_concept_id'))
+  aeolus_drug_outcome_drilldown <- read_tsv(paste0(raw_datadir, 'aeolus_v1/standard_drug_outcome_drilldown.tsv'), na = c('NA','','NULL','null','\\N','\\\\N'),
+                                            col_names = c('drug_concept_id','outcome_concept_id','snomed_outcome_concept_id','primaryid','isr'))
+  aeolus_case_drug <- read_tsv(paste0(raw_datadir, 'aeolus_v1/standard_case_drug.tsv'), na = c('NA','','NULL','null','\\N','\\\\N'),
+                                        col_names = c('primaryid','isr','drug_seq','role_cod','standard_concept_id'))
+
+} else if (src == 'DB') { # ~ Caution: This will be slow with large data like AEOLUS ~ #
   
   #-----------------------------mimic db-----------------------------#
   
@@ -78,15 +88,9 @@ if (src == 'CSV') {
                       user = 'bcbi_shared', password = 'rgi211JKJ3581')
  
   # case_ids, drug_ids, outcome_ids (snomed)
-  aeolus_drug_outcome_drilldown <- tbl(aeolus_db, 'standard_drug_outcome_drilldown')
-  aeolus_drilldown <- filter(aeolus_drug_outcome_drilldown, !is.na(snomed_outcome_concept_id) )
-  aeolus_drilldown <- collect(aeolus_drilldown, n = 500000)
-  
+  aeolus_drug_outcome_drilldown <- collect(tbl(aeolus_db, 'standard_drug_outcome_drilldown'), n = Inf)
   # case_ids, indication_ids (snomed)
-  aeolus_case_indication <- tbl(aeolus_db, 'standard_case_indication')
-  aeolus_indication <- filter(aeolus_case_indication, !is.na(snomed_indication_concept_id))
-  aeolus_indication <- collect(aeolus_indication, n = 500000)
-  
+  aeolus_case_indication <- collect(tbl(aeolus_db, 'standard_case_indication'), n = Inf)
   # concept mapping
   aeolus_concept <- collect(tbl(aeolus_db, 'concept'), n = Inf)
   
@@ -178,8 +182,8 @@ icd9_ccs_multi <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_multi_2015.
 icd9_ccs_single <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2015.csv'))
 icd9_ccs_desc <- read_csv(paste0(raw_datadir, 'icd_grouping/icd_ccs_single_2013.csv'))
 icd9_chap <- read_csv(paste0(raw_datadir, 'icd_grouping/icd9_chapters.csv'))
-icd9_snomedct1TO1 <- read_csv(paste0(raw_datadir, 'icd_grouping/ICD9CM_SNOMED_MAP_1TO1_201612.txt'))
-icd9_snomedct1TOM <- read_csv(paste0(raw_datadir, 'icd_grouping/ICD9CM_SNOMED_MAP_1TOM_201612.txt'))
+icd9_snomedct1TO1 <- read_tsv(paste0(raw_datadir, 'icd_grouping/ICD9CM_SNOMED_MAP_1TO1_201612.txt'), na = c('NA','','NULL','null'))
+icd9_snomedct1TOM <- read_tsv(paste0(raw_datadir, 'icd_grouping/ICD9CM_SNOMED_MAP_1TOM_201612.txt'), na = c('NA','','NULL','null'))
 
 names(mimic_diag) <- tolower(names(mimic_diag))
 names(mimic_diag)[5] <- 'icd_code'
@@ -190,6 +194,17 @@ names(mimic_patients) <- tolower(names(mimic_patients))
 names(icd9_ccs_multi) <- c('icd_code', 'lvl1_cd', 'lvl1_desc', 'lvl2_cd', 'lvl2_desc', 'lvl3_cd', 'lvl3_desc', 'lvl4_cd', 'lvl4_desc')
 names(icd9_ccs_single) <- c('icd_code', 'ccs_cat', 'ccs_desc', 'icd_desc', 'ccs_opt_cat', 'cch_opt_desc')
 names(icd9_ccs_desc) <- c('ccs_cat', 'ccs_full_desc')
+
+### combine two snomed tables
+# filter to icd columns that we need
+icd9_snomedct1TO1 <- icd9_snomedct1TO1 %>%
+  select(icd_code = ICD_CODE, icd_desc = ICD_NAME, snomed_code = SNOMED_CID, snomed_desc = SNOMED_FSN)
+icd9_snomedct1TOM <- icd9_snomedct1TOM %>%
+  select(icd_code = ICD_CODE, icd_desc = ICD_NAME, snomed_code = SNOMED_CID, snomed_desc = SNOMED_FSN)
+# combine the datasets - icd codes can map to 0 or more snomed concepts
+icd9_snomedct <- as.data.frame(rbind(icd9_snomedct1TO1, icd9_snomedct1TOM)) %>%
+  mutate(snomed_code = as.character(snomed_code))
+  select(icd_code, icd_desc, snomed_code, snomed_desc)
 
 ### replace NA's in ccs_multi with previous category description
 icd9_ccs_multi$lvl2_cd[is.na(icd9_ccs_multi$lvl2_cd)] <- icd9_ccs_multi$lvl1_cd[is.na(icd9_ccs_multi$lvl2_cd)]
