@@ -60,9 +60,9 @@ get_cohort <- reactive({
   
   # add all categories to tidy temporal
   tidy_temporal_cats <- tidy_temporal %>%
-    mutate(subject_id = as.numeric(subject_id)) %>%
     left_join(mapping(), by = 'icd_code') %>%
-    mutate_all(funs(replace(., is.na(.), "UNRESOLVED")))
+    mutate_all(funs(replace(., is.na(.), 999999))) %>%   # mutate any NAs to 999999, which means there is no match from icd to other categories
+    mutate(icd_code = as.numeric(icd_code))
   
   # select primary condition
   base_cohort <- tidy_temporal_cats %>%

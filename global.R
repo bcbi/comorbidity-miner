@@ -203,7 +203,7 @@ icd9_snomedct1TOM <- icd9_snomedct1TOM %>%
   select(icd_code = ICD_CODE, icd_desc = ICD_NAME, snomed_code = SNOMED_CID, snomed_desc = SNOMED_FSN)
 # combine the datasets - icd codes can map to 0 or more snomed concepts
 icd9_snomedct <- as.data.frame(rbind(icd9_snomedct1TO1, icd9_snomedct1TOM)) %>%
-  mutate(snomed_code = as.character(snomed_code))
+  mutate(snomed_code = as.character(snomed_code)) %>%
   select(icd_code, icd_desc, snomed_code, snomed_desc)
 
 ### replace NA's in ccs_multi with previous category description
@@ -295,4 +295,5 @@ cdc_tidy_temporal <- mimic_base_temporal %>%
 
 rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap,
    mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
-#rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept)
+rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept, aeolus_case_drug, 
+   aeolus_indi, aeolus_drill, aeolus_drug, icd9_snomedct1TO1, icd9_snomedct1TOM)
