@@ -185,11 +185,11 @@ get_cohort <- reactive({
 observeEvent(input$genData, {
   # write temporal and association to ./data/input/ folder (for input into SPADE and APRIORI algorithms)
   f_name_1 <- ifelse(input$interaction == 'Condition 1 + Condition 2', 
-                     paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_temporal.txt'),
-                     paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_temporal.txt'))
+                     paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2),  '_', input$seq_grp_lvl, '_temporal.txt'),
+                     paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2),  '_', input$seq_grp_lvl, '_temporal.txt'))
   f_name_2 <- ifelse(input$interaction == 'Condition 1 + Condition 2',
-                     paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_association.txt'),
-                     paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_association.txt'))
+                     paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2),  '_', input$seq_grp_lvl, '_association.txt'),
+                     paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2),  '_', input$seq_grp_lvl, '_association.txt'))
   write.table(get_cohort()$temporal, f_name_1, quote = FALSE, sep = ',', row.names = FALSE, col.names = FALSE)
   write.table(get_cohort()$association, f_name_2, quote = FALSE, sep = ',', row.names = FALSE, col.names = FALSE)
 })
@@ -317,8 +317,8 @@ get_seqs <- reactive({
   
   #---------------------------------------cSPADE---------------------------------------#
   fname <- ifelse(input$interaction == 'Condition 1 + Condition 2',
-         paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_temporal.txt'),
-         paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_temporal.txt'))
+         paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2),  '_', input$seq_grp_lvl, '_temporal.txt'),
+         paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2),  '_', input$seq_grp_lvl, '_temporal.txt'))
   
   ld <- read_baskets(fname, sep = ',', info = c('sequenceID', 'eventID'))
   
@@ -708,13 +708,12 @@ output$sankey <- renderGvis({
 
 # ======================================================================================================
 
-# TODO: join codes with descriptions and add switch to view codes or descriptions
 ### Association Rules
 rules <- reactive({
  # get filename
   fname <- ifelse(input$interaction == 'Condition 1 + Condition 2',
-                  paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_association.txt'),
-                  paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_association.txt'))  
+                  paste0(csv_dir, gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2), '_', input$seq_grp_lvl, '_association.txt'),
+                  paste0(csv_dir, gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2), '_', input$seq_grp_lvl, '_association.txt'))  
   
   
  # convert data to transactions format

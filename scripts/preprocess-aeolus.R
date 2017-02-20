@@ -24,10 +24,10 @@ aeolus_indi <- aeolus_case_indication %>%
 aeolus_drill <- aeolus_drug_outcome_drilldown %>%
   mutate(subject_id = primaryid,
          subject_id = ifelse(is.na(subject_id), isr, subject_id) ) %>%
-  select(subject_id, drug_id = drug_concept_id, outcome_snomed_id = snomed_outcome_concept_id) %>%
+  select(subject_id, drug_id = drug_concept_id, outcome_concept_id, outcome_snomed_id = snomed_outcome_concept_id) %>%
   filter(!is.na(subject_id)) %>%
   filter(!is.na(drug_id)) %>%
-  filter(!is.na(outcome_snomed_id))
+  filter(!is.na(outcome_concept_id))
 
 aeolus_drug <- aeolus_case_drug %>%
   mutate(subject_id = primaryid,
@@ -58,172 +58,82 @@ write.table(aeolus_demographics, f_name_d, quote = FALSE, sep = ',', row.names =
 
 
 
-# ---------------- split and recombine aeolus data because its huge ---------------- #
-
-# count number of visits per patient
-aeolus_drill_ids <- aeolus_drill %>%
-  group_by(subject_id) %>%
-  summarise(n_visits = n_distinct(drug_id))
-#ggplot(aeolus_drill_ids, aes(n_visits)) +
-#  geom_bar()
-
-
-# try splitting into two groups: patients who visited once and patients who visited more than once
-# split by number of visits and get IDs
-aeolus_drill_ids_1 <- aeolus_drill_ids %>%             
-  filter(n_visits == 1) %>%
-  select(subject_id)
-aeolus_drill_ids_2 <- aeolus_drill_ids %>%              
-  filter(n_visits > 1 & n_visits <= 3) %>%
-  select(subject_id)
-aeolus_drill_ids_3 <- aeolus_drill_ids %>%
-  filter(n_visits > 3 & n_visits <= 5) %>%
-  select(subject_id)
-aeolus_drill_ids_4 <- aeolus_drill_ids %>%
-  filter(n_visits > 5 & n_visits <= 8) %>%
-  select(subject_id)
-aeolus_drill_ids_5 <- aeolus_drill_ids %>%
-  filter(n_visits > 8 & n_visits <= 10) %>%
-  select(subject_id)
-aeolus_drill_ids_6 <- aeolus_drill_ids %>%
-  filter(n_visits > 10 & n_visits <= 13) %>%
-  select(subject_id)
-aeolus_drill_ids_7 <- aeolus_drill_ids %>%
-  filter(n_visits > 13 & n_visits <= 20) %>%
-  select(subject_id)
-aeolus_drill_ids_8 <- aeolus_drill_ids %>%
-  filter(n_visits > 20) %>%
-  select(subject_id)
-
-# join on IDs
-aeolus_drill_1 <- aeolus_drill %>%                      
-  inner_join(aeolus_drill_ids_1, by = 'subject_id')
-aeolus_drill_2 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_2, by = 'subject_id')
-aeolus_drill_3 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_3, by = 'subject_id')
-aeolus_drill_4 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_4, by = 'subject_id')
-aeolus_drill_5 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_5, by = 'subject_id')
-aeolus_drill_6 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_6, by = 'subject_id')
-aeolus_drill_7 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_7, by = 'subject_id')
-aeolus_drill_8 <- aeolus_drill %>%
-  inner_join(aeolus_drill_ids_8, by = 'subject_id')
-
-rm(aeolus_drill)
-
-
-
-# ---------------- subset anxiety patients ---------------- #
+# ---------------- subset anxiety and depression patients ---------------- #
 # anxiety indication
-anxiety <- 
+# subject_ids
+anxiety <- aeolus_indi %>%
+  filter(grepl('ANXIETY', indi_desc)) %>%
+  distinct(subject_id)
+# get drug sequence and names
+anxiety_drugs <- anxiety %>%
+  left_join(aeolus_drug, by = 'subject_id') %>%
+  left_join(aeolus_concept, by = c('drug_id' = 'concept_id')) 
+# most used drugs
+anxiety_drugs_plot <- anxiety_drugs %>%
+  group_by(concept_name) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  filter(count > 1000)
+# plot
+ggplot(anxiety_drugs_plot, aes(concept_name, count)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() + xlab('drug') + ylab('patients') + ggtitle('anxiety')
+
+# depression indication
+# subject ids
+d <- aeolus_indi %>%
+  filter(grepl('DEPRESS', indi_desc)) %>%
+  distinct(subject_id)
+# get drug sequence and names
+d_drugs <- d %>%
+  left_join(aeolus_drug, by = 'subject_id') %>%
+  left_join(aeolus_concept, by = c('drug_id' = 'concept_id'))
+# most used drugs
+d_drugs_plot <- d_drugs %>%
+  group_by(concept_name) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  filter(count > 1000)
+# plot
+ggplot(d_drugs_plot, aes(concept_name, count)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() + xlab('drug') + ylab('patients') + ggtitle('depression')
 
 
-# get subject ids and drug sequence
-cohort <- kava %>%
-  inner_join(aeolus_drug, by = c('concept_id' = 'drug_id')) %>%
-  select(subject_id, drug_seq, drug_desc = concept_name, drug_code = concept_code) 
 
-# get indication ids and descriptions
-cohort <- cohort %>%
-  left_join(aeolus_indi, by = 'subject_id') %>%
-  select(subject_id, drug_seq, drug_desc, drug_code, indi_snomed_id)
+# ---------------- constrain aeolus to cases with snomed codes that map to icd codes ---------------- #
+# get outcome ids with match to eventual icd9-ccs mapping table
+df <- aeolus_drill %>%
+  distinct(outcome_snomed_id) %>%
+  inner_join(aeolus_concept, by = c('outcome_snomed_id' = 'concept_id')) %>%
+  select(outcome_snomed_id, outcome_snomed_code = concept_code) %>%
+  inner_join(icd9_snomedct, by = c('outcome_snomed_code' = 'snomed_code')) %>%
+  inner_join(icd9_ccs, by = 'icd_code') %>%
+  select(outcome_snomed_id)
 
-# get snomed codes
-cohort <- cohort %>%
-  left_join(aeolus_concept, by = c('indi_snomed_id' = 'concept_id')) %>%
-  select(subject_id, drug_seq, drug_desc, drug_code, indi_snomed_code = concept_code)
+# filter aeolus_drill to outcomes with snomed_code (concept) >>> icd_code (snomedct) >>> icd_code (ccs) match
+aeolus1 <- aeolus_drill %>%
+  inner_join(df, by = 'outcome_snomed_id')
 
-# get icd codes
-cohort <- cohort %>%
-  left_join(icd9_snomedct, by = c('indi_snomed_code' = 'snomed_code')) %>%
-  select(subject_id, drug_seq, drug_desc, drug_code, indi_icd_code = icd_code)
+# get drug seq
+aeolus2 <- aeolus1 %>%
+  inner_join(aeolus_drug, by = c('subject_id', 'drug_id'))
 
-# get ccs categories
+# get outcome snomed codes >>> icd codes
+aeolus3 <- aeolus2 %>%
+  inner_join(aeolus_concept, by = c('outcome_snomed_id' = 'concept_id')) %>%
+  inner_join(icd9_snomedct, by = c('concept_code' = 'snomed_code')) %>%
+  select(subject_id, drug_seq, icd_code) %>%
+  inner_join(icd9_ccs, by = 'icd_code') %>%
+  select(subject_id, admit_id = drug_seq, icd_code)
 
-# group_by ccs single level and tally
+# re-rank drug sequence to remove really large sequence values and change variable name to admit_id
+aeolus <- aeolus3 %>%
+  arrange(subject_id, admit_id) %>%
+  mutate(admit_id = dense_rank(admit_id))
 
 
-
-
-
-# ---------------- combine and transform temporal data ---------------- #
-
-transform_aeolus <- function(df) {
-
-  df2 <- df %>%
-  # join with drug df to get drug sequence
-    inner_join(aeolus_drug, by = 'subject_id') %>%
-    select(subject_id, drug_seq, outcome_snomed_id) %>%
-    
-  # join with concept table to get snomed codes
-    left_join(aeolus_concept, by = c('outcome_snomed_id' = 'concept_id')) %>%
-    select(subject_id, drug_seq, outcome_snomed_code = concept_code) %>%
-    
-  # join with icd9 snomed mapping table to get icd codes
-    left_join(icd9_snomedct, by = c('outcome_snomed_code' = 'snomed_code')) %>%
-    select(subject_id, drug_seq, icd_code) %>%
-    
-  # remove NAs because no match between icd9 codes and snomed ct codes and order by subject/seq
-    filter(!is.na(icd_code)) %>%
-  
-  # reorder by subject id and drug seq
-    mutate(admit_id = dense_rank(drug_seq)) %>%   # min_rank leaves gaps while dense_rank does not
-    select(subject_id, admit_id, icd_code) %>%
-  
-  # nest or collapse subject_id/admit_id
-    group_by(subject_id, admit_id) %>%
-    summarise_each(funs(paste(., collapse = ','))) %>%
-    arrange(subject_id, admit_id)
-}
-
-aeolus_1 <- transform_aeolus(aeolus_drill_1)
-rm(aeolus_1)
-aeolus_2 <- transform_aeolus(aeolus_drill_2)
-rm(aeolus_2)
-aeolus_3 <- transform_aeolus(aeolus_drill_3)
-rm(aeolus_3)
-aeolus_4 <- transform_aeolus(aeolus_drill_4)
-rm(aeolus_4)
-aeolus_5 <- transform_aeolus(aeolus_drill_5)
-rm(aeolus_5)
-aeolus_6 <- transform_aeolus(aeolus_drill_6)
-rm(aeolus_6)
-aeolus_7 <- transform_aeolus(aeolus_drill_7)
-rm(aeolus_7)
-aeolus_8 <- transform_aeolus(aeolus_drill_8)
-
-  
 # write temporal data to csv
 f_name_t <- paste0(csv_dir, 'aeolus_temporal.txt')
-write.table(aeolus_1, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_2, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_3, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_4, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_5, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_6, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_7, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-write.table(aeolus_8, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE, append = TRUE)
-
-
-
-
-
-
-
-
-
-# ---------------- find anxiety herbals  ---------------- #
-
-# how many cases of drug "kava" or Piper methysticum, black pepper or Piper nigrum, ginger or Zingiber officinalis are there? 0
-
-# how many drug and anxiety cases are there?
-# 651  Anxiety disorders    CCS Single Level
-# 5.2       Anxiety disorders [651]    CCS Multi Level 2  
-anxiety_codes <- data.frame(icd_code = c(29384,30000,30001,30002,30009,30010,30020,30021,30022,30023,30029,
-                                         3003,3005,30089,3009,3080,3081,3082,3083,3084,3089,30981,3130,3131,
-                                         31321,31322,3133,31382,31383))
+write.table(aeolus, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE)
 

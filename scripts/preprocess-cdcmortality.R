@@ -133,7 +133,7 @@ cdc_temporal <- rbind(cdc_temp1, cdc_temp2) %>%
   select(ID, admit_id, icd_code)
 
 
-# demographics
+# ---------------------- demographics ---------------------- #
 res_status_codes <- data.frame(res_status = c(1:4),
                                res_status2 = c('resident','nonresident_intrastate','nonresident_interterritory','foreign_resident'))
 education_89_codes <- data.frame(education_89 = c('00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','99'),

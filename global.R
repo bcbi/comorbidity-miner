@@ -205,6 +205,9 @@ icd9_snomedct1TOM <- icd9_snomedct1TOM %>%
 icd9_snomedct <- as.data.frame(rbind(icd9_snomedct1TO1, icd9_snomedct1TOM)) %>%
   mutate(snomed_code = as.character(snomed_code)) %>%
   select(icd_code, icd_desc, snomed_code, snomed_desc)
+# mutate icd codes so periods become ""
+icd9_snomedct <- icd9_snomedct %>%
+  mutate(icd_code = gsub("\\.", "", icd_code))
 
 ### replace NA's in ccs_multi with previous category description
 icd9_ccs_multi$lvl2_cd[is.na(icd9_ccs_multi$lvl2_cd)] <- icd9_ccs_multi$lvl1_cd[is.na(icd9_ccs_multi$lvl2_cd)]
