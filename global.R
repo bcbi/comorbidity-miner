@@ -276,27 +276,32 @@ cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_n
 names(cdc_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
 names(cdc_base_demographics) <- c('subject_id', 'citizenship', 'education1', 'education2', 'sex_at_birth', 'age_group', 'age_infant', 'marital', 'race', 'hispanic')
 
-#aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal.txt'), col_names = F)
-#aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics.txt'), col_names = F)
-#names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
-#names(aeolus_base_demographics)[1] <- 'subject_id'
+aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal.txt'), col_names = F)
+aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics.txt'), col_names = F)
+names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+names(aeolus_base_demographics) <- c('subject_id', 'drug_seq', 'drug_id', 'drug_desc', 'indi_desc', 'indi_snomed_id', 'indi_snomed_code', 'indi_snomed_desc')
 
 
 # transform data using tidyr so that each condition gets it's own row
 mimic_tidy_temporal <- mimic_base_temporal %>%
   mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
   unnest(icd_code)
-cdc_tidy_temporal <- mimic_base_temporal %>%
+cdc_tidy_temporal <- cdc_base_temporal %>%
   mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
   unnest(icd_code)
-
+aeolus_tidy_temporal <- aeolus_base_demographics %>%
+  select(subject_id, drug_seq, indi_snomed_code, indi_desc) %>%
+  mutate(admit_id = dense_rank(drug_seq)) %>%
+  select(subject_id, admit_id, indi_snomed_code, indi_desc) %>%
+  inner_join(icd9_snomedct, by = c('indi_snomed_code' = 'snomed_code')) %>%
+  select(subject_id, admit_id, icd_code, icd_desc, snomed_code, snomed_desc)
 
 
 ######################
 # rm dataframes
 ######################
 
-rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap,
+rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap, ccs_desc, ccs_multi, ccs_single,
    mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
 rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept, aeolus_case_drug, 
    aeolus_indi, aeolus_drill, aeolus_drug, icd9_snomedct1TO1, icd9_snomedct1TOM)

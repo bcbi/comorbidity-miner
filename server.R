@@ -56,13 +56,19 @@ get_cohort <- reactive({
     base_temporal <- aeolus_base_temporal
     base_demographics <- aeolus_base_demographics
     tidy_temporal <- aeolus_tidy_temporal
+    tidy_temporal2 <- aeolus_tidy_temporal2
   }
   
   # add all categories to tidy temporal
-  tidy_temporal_cats <- tidy_temporal %>%
-    left_join(mapping(), by = 'icd_code') %>%
-    mutate_all(funs(replace(., is.na(.), 999999))) %>%   # mutate any NAs to 999999, which means there is no match from icd to other categories
-    mutate(icd_code = as.numeric(icd_code))
+  if(input$data_src == 'aeolus') {
+    tidy_temporal_cats <- tidy_temporal2 %>%
+      
+  } else {
+    tidy_temporal_cats <- tidy_temporal %>%
+      left_join(mapping(), by = 'icd_code') %>%
+      mutate_all(funs(replace(., is.na(.), 999999))) %>%   # mutate any NAs to 999999, which means there is no match from icd to other categories
+      mutate(icd_code = as.numeric(icd_code))
+  }
   
   # select primary condition
   base_cohort <- tidy_temporal_cats %>%

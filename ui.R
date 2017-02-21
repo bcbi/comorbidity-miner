@@ -110,7 +110,7 @@ shinyUI(dashboardPage(
                                             'CCS Single-level' = 'ccs_s', 
                                             'CCS Multi-level 1' = 'ccs1', 
                                             'CCS Multi-level 2' = 'ccs2'),
-                                selected = 'ccs1')
+                                selected = 'ccs2')
                   ),
                   
                   box(
@@ -150,8 +150,7 @@ shinyUI(dashboardPage(
               tabsetPanel(
                 tabPanel("Demographics", dataTableOutput("demographicsTable")),
                 tabPanel("All Unique Codes", dataTableOutput("patientsTable")),
-                tabPanel("Condition Histogram", plotOutput("frequentPatientsPlot")),
-                tabPanel("test temporal df", dataTableOutput('testTable'))
+                tabPanel("Condition Histogram", plotOutput("frequentPatientsPlot"))
                 )
               ),
               
