@@ -33,5 +33,9 @@ Initialize the app by clicking "Run App" in the top right corner of the editor p
 
 
 ## Using the app
+Navigate the app using the tabs in the sidebar. Adjust the Settings to explore a new cohort and make sure to Write Cohort to File before moving on to other tabs. Below, we have selected patients from the MIMIC-III database who have been diagnosed with anxiety and mood disorders and who have multiple hospital visits on record. These settings generate a subset of patients whose charts show at least one ICD9 code from CCS Multi-level 2 category 5.2 (Anxiety Disorders) and at least one ICD9 code from CCS Multi-level 2 category 5.8 (Mood Disorders). The sequences/associations granularity dropdown changes the semantic groupings used for data mining and output. Here, CCS Multi-level 2 has been selected, which will result in more general sequences and association rules than ICD9-CM codes, but less general than CCS Multi-level 1 or ICD9-Chapter groupings. 
+
+![ScreenShot](https://cloud.githubusercontent.com/assets/15157854/23473170/4036bda8-fe7d-11e6-9680-c6580efdb9dc.png)
+
 
 * A demo with simulated data will be coming in the near future.
