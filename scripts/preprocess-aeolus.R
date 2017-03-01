@@ -38,6 +38,7 @@ aeolus_concept <- aeolus_concept %>%
 
 
 # ---------------- subset anxiety patients, get drugs used, compare meddra and icd ---------------- #
+
 # anxiety indication
 # unique subject_ids: 35359 patients
 anxiety <- aeolus_indi %>%
@@ -131,7 +132,3 @@ aeolus <- aeolus3 %>%
 # write temporal data to csv
 f_name_t <- paste0(csv_dir, 'aeolus_temporal_anxiety.txt')
 write.table(aeolus, f_name_t, quote = TRUE, sep = ',', row.names = FALSE, col.names = FALSE)
-
-
-
-
