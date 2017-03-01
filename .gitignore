@@ -2,6 +2,7 @@
 *.DS_Store
 
 # R Project files
+.Rproj
 .Rproj.user
 .Rhistory
 .RData
@@ -9,13 +10,14 @@
 .Rapp.history
 dbg.R
 
-# Data files
+# Data files: excluded because of licensing and/or size restrictions
 data/mimic_tables/*
 data/output/*
 data/input/*
-nomatch_icd9_ccs_codes.csv
 data/EMR-robots-100/*
-data/CDC-vitals/*				 # freely available online but too large for repo
-data/icd_grouping/snowmedct_icd10cm_20160901.tsv # need umls license for this data
-data/icd_grouping/ICD9CM_SNOMED_MAP_1TO1_201612.txt # need umls license
-data/icd_grouping/ICD9CM_SNOMED_MAP_1TOM_201612.txt # need umls license
+data/CDC-vitals/*				 
+data/aeolus_v1/*
+data/icd_grouping/snowmedct_icd10cm_20160901.tsv
+data/icd_grouping/ICD9CM_SNOMED_MAP_1TO1_201612.txt
+data/icd_grouping/ICD9CM_SNOMED_MAP_1TOM_201612.txt
+data/nomatch_icd9_ccs_codes.csv
