@@ -84,8 +84,8 @@ if (src == 'CSV') {
   
   #-----------------------------aeolus db-----------------------------#
   
-  aeolus_db <- src_mysql(dbname = 'aeolus', host = 'pbcbicit.services.brown.edu',
-                      user = 'bcbi_shared', password = 'rgi211JKJ3581')
+  aeolus_db <- src_mysql(dbname = 'aeolus', host = 'host',
+                      user = 'username', password = 'password')
  
   # case_ids, drug_ids, outcome_ids (snomed)
   aeolus_drug_outcome_drilldown <- collect(tbl(aeolus_db, 'standard_drug_outcome_drilldown'), n = Inf)
@@ -93,6 +93,8 @@ if (src == 'CSV') {
   aeolus_case_indication <- collect(tbl(aeolus_db, 'standard_case_indication'), n = Inf)
   # concept mapping
   aeolus_concept <- collect(tbl(aeolus_db, 'concept'), n = Inf)
+  # case_ids, drug_ids, drug_seqs
+  aeolus_case_drug <- collect(tbl(aeolus_db, 'standard_case_drug'), n = Inf)
   
   
 }
@@ -203,7 +205,7 @@ icd9_snomedct1TOM <- icd9_snomedct1TOM %>%
   select(icd_code = ICD_CODE, icd_desc = ICD_NAME, snomed_code = SNOMED_CID, snomed_desc = SNOMED_FSN)
 # combine the datasets - icd codes can map to 0 or more snomed concepts
 icd9_snomedct <- as.data.frame(rbind(icd9_snomedct1TO1, icd9_snomedct1TOM)) %>%
-  mutate(snomed_code = as.character(snomed_code)) %>%
+#  mutate(snomed_code = as.character(snomed_code)) %>%
   select(icd_code, icd_desc, snomed_code, snomed_desc)
 # mutate icd codes so periods become ""
 icd9_snomedct <- icd9_snomedct %>%
@@ -232,10 +234,9 @@ names(mp) <- c('icd_chp', 'icd_c')
 icd9_chap <- icd9_chap %>%
   inner_join(mp, by = 'icd_chp')
 
-### 
 
 
-### CCS icd9 mappings table
+### CCS icd9 SNOMED mappings table
 icd9_ccs <- icd9_ccs_multi %>% 
   # add icd9 codes and long titles
   inner_join(mimic_icd9, by = 'icd_code') %>%
@@ -247,6 +248,9 @@ icd9_ccs <- icd9_ccs_multi %>%
   inner_join(icd9_chap, by = c('icd_code' = 'icd')) %>%
   select(icd_code, icd_desc = long_title, ccs_code = ccs_cat, ccs_desc, ccs1_code = lvl1_cd, ccs1_desc = lvl1_desc, ccs2_code = lvl2_cd, ccs2_desc = lvl2_desc, ccs3_code = lvl3_cd, ccs3_desc = lvl3_desc, 
          icd_chp_code = icd_c, icd_chp_desc = icd_chp) %>%
+  # add snomed codes
+  inner_join(icd9_snomedct, by = 'icd_code') %>%
+  select(icd_code, icd_desc = icd_desc.x, ccs_code, ccs_desc, ccs1_code, ccs1_desc, ccs2_code, ccs2_desc, ccs3_code, ccs3_desc, icd_chp_code, icd_chp_desc, snomed_code, snomed_desc) %>%
   # create new columns to be used in dropdown menus for readability
   mutate(icd = paste0(icd_code, ' - ', icd_desc),
          icd_c = paste0(icd_chp_code, ' - ', icd_chp_desc),
@@ -256,8 +260,13 @@ icd9_ccs <- icd9_ccs_multi %>%
          ccs2 = paste0(ccs2_code, ' - ', ccs2_desc),
          ccs3 = paste0(ccs3_code, ' - ', ccs3_desc),
          ccs_code = as.character(ccs_code),
-         icd_chp_code = as.character(icd_chp_code)
+         icd_chp_code = as.character(icd_chp_code),
+         snomed = paste0(snomed_code, ' - ', snomed_desc),
+         snomed_code = as.character(snomed_code)
          )
+
+
+
 
 
 
@@ -276,25 +285,28 @@ cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_n
 names(cdc_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
 names(cdc_base_demographics) <- c('subject_id', 'citizenship', 'education1', 'education2', 'sex_at_birth', 'age_group', 'age_infant', 'marital', 'race', 'hispanic')
 
-aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal.txt'), col_names = F)
-aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics.txt'), col_names = F)
+aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal_anxiety.txt'), col_names = F)
+aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics_anxiety.txt'), col_names = F)
 names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
 names(aeolus_base_demographics) <- c('subject_id', 'drug_seq', 'drug_id', 'drug_desc', 'indi_desc', 'indi_snomed_id', 'indi_snomed_code', 'indi_snomed_desc')
-
+aeolus_base_temporal <- aeolus_base_temporal %>%
+  mutate(icd_code = as.character(icd_code))
 
 # transform data using tidyr so that each condition gets it's own row
+# these data are going to be used with the "get_cohort()" reactive function in server.R
 mimic_tidy_temporal <- mimic_base_temporal %>%
   mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
   unnest(icd_code)
 cdc_tidy_temporal <- cdc_base_temporal %>%
   mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
   unnest(icd_code)
-aeolus_tidy_temporal <- aeolus_base_demographics %>%
-  select(subject_id, drug_seq, indi_snomed_code, indi_desc) %>%
-  mutate(admit_id = dense_rank(drug_seq)) %>%
-  select(subject_id, admit_id, indi_snomed_code, indi_desc) %>%
-  inner_join(icd9_snomedct, by = c('indi_snomed_code' = 'snomed_code')) %>%
-  select(subject_id, admit_id, icd_code, icd_desc, snomed_code, snomed_desc)
+aeolus_tidy_temporal <- aeolus_base_demographics %>%               # search by indication rather than codes with aeolus
+  mutate(admit_id = dense_rank(drug_seq)) %>%                      # limit tidy temporal to anxiety patients here bc aeolus too big
+  filter(grepl('ANXIETY', indi_desc)) %>%
+  select(subject_id, admit_id, snomed_code = indi_snomed_code) %>%
+  mutate(snomed_code = as.character(snomed_code))
+
+  
 
 
 ######################
