@@ -6,6 +6,61 @@
 # brown center for biomedical informatics |
 # ----------------------------------------|
 
+
+
+######################
+# pull processed data
+######################
+
+mimic_base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
+mimic_base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
+names(mimic_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+names(mimic_base_demographics) <- c('subject_id', 'age', 'age_dod', 'sex_at_birth', 'expire_flag', 
+                                    'admit_type', 'admit_location', 'insurance', 'language', 'religion', 'marital', 'ethnicity', 'hospital_expire_flag')
+
+cdc_base_temporal <- read_csv(paste0(csv_dir, 'cdc_temporal.txt'), col_names = F)
+cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_names = F)
+names(cdc_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+names(cdc_base_demographics) <- c('subject_id', 'citizenship', 'education1', 'education2', 'sex_at_birth', 'age_group', 'age_infant', 'marital', 'race', 'hispanic')
+
+aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal_anxiety.txt'), col_names = F)
+aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics_anxiety.txt'), col_names = F)
+names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+names(aeolus_base_demographics) <- c('subject_id', 'drug_seq', 'drug_id', 'drug_desc', 'indi_desc', 'indi_snomed_id', 'indi_snomed_code', 'indi_snomed_desc')
+aeolus_base_temporal <- aeolus_base_temporal %>%
+  mutate(icd_code = as.character(icd_code))
+
+# transform data using tidyr so that each condition gets it's own row
+# these data are going to be used with the "get_cohort()" reactive function in server.R
+mimic_tidy_temporal <- mimic_base_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code)
+cdc_tidy_temporal <- cdc_base_temporal %>%
+  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+  unnest(icd_code)
+aeolus_tidy_temporal <- aeolus_base_demographics %>%               # search by indication rather than codes with aeolus
+  mutate(admit_id = dense_rank(drug_seq)) %>%                      # limit tidy temporal to anxiety patients here bc aeolus too big
+  filter(grepl('ANXIETY', indi_desc)) %>%
+  select(subject_id, admit_id, snomed_code = indi_snomed_code) %>%
+  mutate(snomed_code = as.character(snomed_code))
+
+
+
+######################
+# rm dataframes
+######################
+
+rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap, ccs_desc, ccs_multi, ccs_single,
+   mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
+rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept, aeolus_case_drug, 
+   aeolus_indi, aeolus_drill, aeolus_drug, icd9_snomedct1TO1, icd9_snomedct1TOM)
+
+
+
+######################
+# start shiny server
+######################
+
 shinyServer(function(input, output, session) {
 
 
@@ -610,7 +665,7 @@ get_seqs <- reactive({
                                    !(seqdf$c_1 == seqdf$c_7) & !(embed_consec == 1)), 1, 0) ) %>%
   
   select(sequence, support, c_1, c_2, c_3, c_4, c_5, c_6, c_7, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if (len == 7) {
+  } else if (len >= 7) {
     
     # add length of sequence and make each step it's own column
     seqdf <- seqdf %>%
@@ -719,7 +774,7 @@ get_seqs <- reactive({
 
   ### remove sequences with length = 1 and sequences with any type of repeat
   # find rows with duplicates across 'c_*' columns and remove
-  if(len == 7) {
+  if(len >= 7) {
     seqdf <- seqdf %>%
       rowwise() %>%
       mutate(repeats = ifelse(sum(duplicated(c(c_1,c_2,c_3,c_4,c_5,c_6,c_7,c_8), incomparables = NA)) == 0, 0, 1)) %>%
@@ -765,7 +820,7 @@ get_seqs <- reactive({
   
   #--------------------re-format sequences output--------------------#
   ### replace codes with descriptions
-  if(len == 7) {
+  if(len >= 7) {
     if(input$seq_grp_lvl == 'icd') {
       seqdf <- seqdf %>%
         left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
@@ -1202,7 +1257,23 @@ get_seqs <- reactive({
   
   #--------------------filter sequences--------------------#
   ### remove sequences containing unclassified codes 
-  if(len == 3) {
+  if(len >= 7) {
+    seqdf <- seqdf %>%
+      filter(!grepl('[Uu]nclassified', c_1) & !grepl('[Uu]nclassified', c_2) & !grepl('[Uu]nclassified', c_3) & !grepl('[Uu]nclassified', c_4)
+             & !grepl('[Uu]nclassified', c_5) & !grepl('[Uu]nclassified', c_6)& !grepl('[Uu]nclassified', c_7) & !grepl('[Uu]nclassified', c_8))
+  } else if(len == 6) {
+    seqdf <- seqdf %>%
+      filter(!grepl('[Uu]nclassified', c_1) & !grepl('[Uu]nclassified', c_2) & !grepl('[Uu]nclassified', c_3) & !grepl('[Uu]nclassified', c_4) & 
+               !grepl('[Uu]nclassified', c_5) & !grepl('[Uu]nclassified', c_6) & !grepl('[Uu]nclassified', c_7))
+  } else if(len == 5) {
+    seqdf <- seqdf %>%
+      filter(!grepl('[Uu]nclassified', c_1) & !grepl('[Uu]nclassified', c_2) & !grepl('[Uu]nclassified', c_3) & !grepl('[Uu]nclassified', c_4) & 
+               !grepl('[Uu]nclassified', c_5) & !grepl('[Uu]nclassified', c_6))
+  } else if(len == 4) {
+    seqdf <- seqdf %>%
+      filter(!grepl('[Uu]nclassified', c_1) & !grepl('[Uu]nclassified', c_2) & !grepl('[Uu]nclassified', c_3) & !grepl('[Uu]nclassified', c_4) & 
+               !grepl('[Uu]nclassified', c_5))
+  } else if(len == 3) {
     seqdf <- seqdf %>%
       filter(!grepl('[Uu]nclassified', c_1) & !grepl('[Uu]nclassified', c_2) & !grepl('[Uu]nclassified', c_3) & !grepl('[Uu]nclassified', c_4))
   } else if(len == 2) {

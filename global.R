@@ -85,7 +85,7 @@ if (src == 'CSV') {
   #-----------------------------aeolus db-----------------------------#
   
   aeolus_db <- src_mysql(dbname = 'aeolus', host = 'host',
-                      user = 'username', password = 'password')
+                      user = 'aeolus_user', password = 'aeolus')
  
   # case_ids, drug_ids, outcome_ids (snomed)
   aeolus_drug_outcome_drilldown <- collect(tbl(aeolus_db, 'standard_drug_outcome_drilldown'), n = Inf)
@@ -270,50 +270,50 @@ icd9_ccs <- icd9_ccs_multi %>%
 
 
 
-######################
-# pull processed data
-######################
-
-mimic_base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
-mimic_base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
-names(mimic_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
-names(mimic_base_demographics) <- c('subject_id', 'age', 'age_dod', 'sex_at_birth', 'expire_flag', 
-                                    'admit_type', 'admit_location', 'insurance', 'language', 'religion', 'marital', 'ethnicity', 'hospital_expire_flag')
-
-cdc_base_temporal <- read_csv(paste0(csv_dir, 'cdc_temporal.txt'), col_names = F)
-cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_names = F)
-names(cdc_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
-names(cdc_base_demographics) <- c('subject_id', 'citizenship', 'education1', 'education2', 'sex_at_birth', 'age_group', 'age_infant', 'marital', 'race', 'hispanic')
-
-aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal_anxiety.txt'), col_names = F)
-aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics_anxiety.txt'), col_names = F)
-names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
-names(aeolus_base_demographics) <- c('subject_id', 'drug_seq', 'drug_id', 'drug_desc', 'indi_desc', 'indi_snomed_id', 'indi_snomed_code', 'indi_snomed_desc')
-aeolus_base_temporal <- aeolus_base_temporal %>%
-  mutate(icd_code = as.character(icd_code))
-
-# transform data using tidyr so that each condition gets it's own row
-# these data are going to be used with the "get_cohort()" reactive function in server.R
-mimic_tidy_temporal <- mimic_base_temporal %>%
-  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
-  unnest(icd_code)
-cdc_tidy_temporal <- cdc_base_temporal %>%
-  mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
-  unnest(icd_code)
-aeolus_tidy_temporal <- aeolus_base_demographics %>%               # search by indication rather than codes with aeolus
-  mutate(admit_id = dense_rank(drug_seq)) %>%                      # limit tidy temporal to anxiety patients here bc aeolus too big
-  filter(grepl('ANXIETY', indi_desc)) %>%
-  select(subject_id, admit_id, snomed_code = indi_snomed_code) %>%
-  mutate(snomed_code = as.character(snomed_code))
-
-  
-
-
-######################
-# rm dataframes
-######################
-
-rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap, ccs_desc, ccs_multi, ccs_single,
-   mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
-rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept, aeolus_case_drug, 
-   aeolus_indi, aeolus_drill, aeolus_drug, icd9_snomedct1TO1, icd9_snomedct1TOM)
+# ######################
+# # pull processed data
+# ######################
+# 
+# mimic_base_temporal <- read_csv(paste0(csv_dir, 'mimic_temporal.txt'), col_names = F)
+# mimic_base_demographics <- read_csv(paste0(csv_dir, 'mimic_demographics.txt'), col_names = F)
+# names(mimic_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+# names(mimic_base_demographics) <- c('subject_id', 'age', 'age_dod', 'sex_at_birth', 'expire_flag', 
+#                                     'admit_type', 'admit_location', 'insurance', 'language', 'religion', 'marital', 'ethnicity', 'hospital_expire_flag')
+# 
+# cdc_base_temporal <- read_csv(paste0(csv_dir, 'cdc_temporal.txt'), col_names = F)
+# cdc_base_demographics <- read_csv(paste0(csv_dir, 'cdc_demographics.txt'), col_names = F)
+# names(cdc_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+# names(cdc_base_demographics) <- c('subject_id', 'citizenship', 'education1', 'education2', 'sex_at_birth', 'age_group', 'age_infant', 'marital', 'race', 'hispanic')
+# 
+# aeolus_base_temporal <- read_csv(paste0(csv_dir, 'aeolus_temporal_anxiety.txt'), col_names = F)
+# aeolus_base_demographics <- read_csv(paste0(csv_dir, 'aeolus_demographics_anxiety.txt'), col_names = F)
+# names(aeolus_base_temporal) <- c('subject_id', 'admit_id', 'icd_code')
+# names(aeolus_base_demographics) <- c('subject_id', 'drug_seq', 'drug_id', 'drug_desc', 'indi_desc', 'indi_snomed_id', 'indi_snomed_code', 'indi_snomed_desc')
+# aeolus_base_temporal <- aeolus_base_temporal %>%
+#   mutate(icd_code = as.character(icd_code))
+# 
+# # transform data using tidyr so that each condition gets it's own row
+# # these data are going to be used with the "get_cohort()" reactive function in server.R
+# mimic_tidy_temporal <- mimic_base_temporal %>%
+#   mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+#   unnest(icd_code)
+# cdc_tidy_temporal <- cdc_base_temporal %>%
+#   mutate(icd_code = strsplit(as.character(icd_code), ",")) %>%
+#   unnest(icd_code)
+# aeolus_tidy_temporal <- aeolus_base_demographics %>%               # search by indication rather than codes with aeolus
+#   mutate(admit_id = dense_rank(drug_seq)) %>%                      # limit tidy temporal to anxiety patients here bc aeolus too big
+#   filter(grepl('ANXIETY', indi_desc)) %>%
+#   select(subject_id, admit_id, snomed_code = indi_snomed_code) %>%
+#   mutate(snomed_code = as.character(snomed_code))
+# 
+#   
+# 
+# 
+# ######################
+# # rm dataframes
+# ######################
+# 
+# rm(icd10_chap, icd9_ccs_desc, icd9_ccs_multi, icd9_ccs_single, icd9_chap, ccs_desc, ccs_multi, ccs_single,
+#    mimic_admit, mimic_diag, mimic_icd9, mimic_patients)
+# rm(aeolus_case_indication, aeolus_drug_outcome_drilldown, aeolus_concept, aeolus_case_drug, 
+#    aeolus_indi, aeolus_drill, aeolus_drug, icd9_snomedct1TO1, icd9_snomedct1TOM)
