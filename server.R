@@ -380,6 +380,7 @@ get_seqs <- reactive({
   sequences <- cspade(ld, parameter=list(support = input$supportS), control = list(verbose = TRUE))
   
   #---------------------------------------seq_df---------------------------------------#
+  
   #--------------------re-format output--------------------#
   # order sequences by support
   seqdf <- as(sequences, 'data.frame')
@@ -400,7 +401,17 @@ get_seqs <- reactive({
   states <- separate(seqdf[-2], sequence, state_names, " => ", fill = 'right')
   seqdf <- cbind(sequence = seqdf$sequence, support = seqdf$support, states)
   
+  
   #--------------------flag sequence repeats/lengths--------------------#
+  # remove 
+  if(len > 7) {
+    seqdf <- seqdf %>%
+      select(sequence, support, c_1, c_2, c_3, c_4, c_5, c_6, c_7, c_8)
+    
+    len <- 7
+  }
+  
+  
   # flag 4 different types of repeats within sequences and add length of sequence
   if(len == 1) {
     
@@ -665,7 +676,7 @@ get_seqs <- reactive({
                                    !(seqdf$c_1 == seqdf$c_7) & !(embed_consec == 1)), 1, 0) ) %>%
   
   select(sequence, support, c_1, c_2, c_3, c_4, c_5, c_6, c_7, length, consec, non_consec, embed_consec, embed_non_consec)
-  } else if (len >= 7) {
+  } else if (len == 7) {
     
     # add length of sequence and make each step it's own column
     seqdf <- seqdf %>%
@@ -774,7 +785,7 @@ get_seqs <- reactive({
 
   ### remove sequences with length = 1 and sequences with any type of repeat
   # find rows with duplicates across 'c_*' columns and remove
-  if(len >= 7) {
+  if(len == 7) {
     seqdf <- seqdf %>%
       rowwise() %>%
       mutate(repeats = ifelse(sum(duplicated(c(c_1,c_2,c_3,c_4,c_5,c_6,c_7,c_8), incomparables = NA)) == 0, 0, 1)) %>%
@@ -820,7 +831,7 @@ get_seqs <- reactive({
   
   #--------------------re-format sequences output--------------------#
   ### replace codes with descriptions
-  if(len >= 7) {
+  if(len == 7) {
     if(input$seq_grp_lvl == 'icd') {
       seqdf <- seqdf %>%
         left_join(distinct(select(mapping(), icd_code, icd_desc)), by = c('c_1' = 'icd_code')) %>%
@@ -1257,7 +1268,7 @@ get_seqs <- reactive({
   
   #--------------------filter sequences--------------------#
   ### remove sequences containing unclassified codes 
-  if(len >= 7) {
+  if(len == 7) {
     seqdf <- seqdf %>%
       filter(!grepl('[Uu]nclassified', c_1) & !grepl('[Uu]nclassified', c_2) & !grepl('[Uu]nclassified', c_3) & !grepl('[Uu]nclassified', c_4)
              & !grepl('[Uu]nclassified', c_5) & !grepl('[Uu]nclassified', c_6)& !grepl('[Uu]nclassified', c_7) & !grepl('[Uu]nclassified', c_8))
@@ -1286,14 +1297,29 @@ get_seqs <- reactive({
   
   ### select sequences that start with regular expression
   input$startsWithButton
-  
   seqdf <- isolate(seqdf %>%
     filter(grepl(input$startsWith, c_1)))
   
   ### select sequences that contain regular expression
   input$containsButton
   isolate(
-    if(len == 3) {
+    if(len == 7) {
+      seqdf <- seqdf %>%
+        filter(grepl(input$contains, c_1) | grepl(input$contains, c_2) | grepl(input$contains, c_3) | grepl(input$contains, c_4) |
+                 grepl(input$contains, c_5) | grepl(input$contains, c_6) | grepl(input$contains, c_7) | grepl(input$contains, c8))
+    } else if(len == 6) {
+      seqdf <- seqdf %>%
+        filter(grepl(input$contains, c_1) | grepl(input$contains, c_2) | grepl(input$contains, c_3) | grepl(input$contains, c_4) |
+                 grepl(input$contains, c_5) | grepl(input$contains, c_6) | grepl(input$contains, c_7))
+    } else if(len == 5) {
+      seqdf <- seqdf %>%
+        filter(grepl(input$contains, c_1) | grepl(input$contains, c_2) | grepl(input$contains, c_3) | grepl(input$contains, c_4) |
+                 grepl(input$contains, c_5) | grepl(input$contains, c_6))
+    } else if(len == 4) {
+      seqdf <- seqdf %>%
+        filter(grepl(input$contains, c_1) | grepl(input$contains, c_2) | grepl(input$contains, c_3) | grepl(input$contains, c_4) | 
+                 grepl(input$contains, c_5))
+    } else if(len == 3) {
       seqdf <- seqdf %>%
         filter(grepl(input$contains, c_1) | grepl(input$contains, c_2) | grepl(input$contains, c_3) | grepl(input$contains, c_4))
     } else if(len == 2) {
@@ -1304,6 +1330,7 @@ get_seqs <- reactive({
         filter(grepl(input$contains, c_1) | grepl(input$contains, c_2))
     }
   )
+  
 
   #---------------------------------------df_plot---------------------------------------#
   ### remove "sequence" column
