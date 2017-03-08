@@ -114,15 +114,8 @@ get_cohort <- reactive({
   }
   
   # add all categories to tidy temporal
-  if(input$data_src == 'aeolus') {
-    tidy_temporal_cats <- tidy_temporal %>%               # aeolus is too big to keep NAs
-      inner_join(mapping())
-  } else {
-    tidy_temporal_cats <- tidy_temporal %>%
-      left_join(mapping()) %>%
-      mutate_all(funs(replace(., is.na(.), 999999))) %>%   # mutate any NAs to 999999, which means there is no match from icd to other categories
-      mutate(icd_code = as.numeric(icd_code))
-  }
+  tidy_temporal_cats <- tidy_temporal %>%               # aeolus is too big to keep NAs
+    inner_join(mapping())
   
   # select primary condition
   base_cohort <- tidy_temporal_cats %>%

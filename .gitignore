@@ -5,7 +5,7 @@
 .Rproj
 .Rproj.user
 .Rhistory
-.RData
+.RData*
 .Ruserdata
 .Rapp.history
 dbg.R

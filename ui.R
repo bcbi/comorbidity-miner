@@ -9,9 +9,9 @@
 # TOFIX: size of tables and plots
 
 shinyUI(dashboardPage(
-  title = "EHR",
+  title = "CMiner",
   skin = "red",
-  dashboardHeader(title = "EHR Miner", titleWidth = 300),
+  dashboardHeader(title = "Comorbidity Miner", titleWidth = 300),
   
   dashboardSidebar(
     
@@ -32,7 +32,7 @@ shinyUI(dashboardPage(
       ),
       
       menuItem(
-        "Sequence Patterns", tabName = "sequence"
+        "Sequential Patterns", tabName = "sequence"
         ),
       
       menuItem(
