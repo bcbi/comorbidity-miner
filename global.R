@@ -18,6 +18,14 @@
 # setup
 ######################
 
+# install any missing packages
+dependencies <- c('shiny', 'shinydashboard', 'googleVis', 'plyr', 'dplyr', 'readr', 'tidyr', 'arules',
+                  'arulesViz', 'arulesSequences', 'stringi', 'stringr', 'DT', 'ggplot2', 'RMySQL',
+                  'magrittr', 'data.table', 'dtplyr', 'scales', 'knitr')
+installed <- installed.packages()[,'Package']
+to_install <- dependencies[!(dependencies %in% installed)]
+if(length(to_install)) {install.packages(to_install)}
+
 # load packages
 library(shiny)
 library(shinydashboard)

@@ -6,20 +6,9 @@
 # brown center for biomedical informatics |
 #                                         |
 # credit to yuangqing liu                 |
-# brown univeristy school of public health|
+# brown university school of public health|
 # ----------------------------------------|
 
-
-
-library(readr)
-library(magrittr)
-library(data.table)
-library(dplyr)
-library(dtplyr)
-library(stringr)
-library(tidyr)
-library(scales)
-library(knitr)
 
 
 #------------------------------------------raw data------------------------------------------#
