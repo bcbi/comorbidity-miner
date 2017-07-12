@@ -140,7 +140,7 @@ shinyUI(dashboardPage(
       tabItem("all_patients",
               tabsetPanel(
                 tabPanel('ICD Mapping', dataTableOutput("outGroupTable")),
-                tabPanel('Condition Histogram', plotOutput("frequentCodesPlot"))
+                tabPanel('Condition Histogram', plotOutput("frequentCodesPlot"), radioButtons("png_pdf", "Select File Type", list("png", "pdf")), downloadButton("codesPlotDownload", "Download Plot"))
                 )
               ),
               

@@ -257,7 +257,7 @@ icd9_ccs <- icd9_ccs_multi %>%
   select(icd_code, icd_desc = long_title, ccs_code = ccs_cat, ccs_desc, ccs1_code = lvl1_cd, ccs1_desc = lvl1_desc, ccs2_code = lvl2_cd, ccs2_desc = lvl2_desc, ccs3_code = lvl3_cd, ccs3_desc = lvl3_desc, 
          icd_chp_code = icd_c, icd_chp_desc = icd_chp) %>%
   # add snomed codes
-  inner_join(icd9_snomedct, by = 'icd_code') %>%
+  left_join(icd9_snomedct, by = 'icd_code') %>%
   select(icd_code, icd_desc = icd_desc.x, ccs_code, ccs_desc, ccs1_code, ccs1_desc, ccs2_code, ccs2_desc, ccs3_code, ccs3_desc, icd_chp_code, icd_chp_desc, snomed_code, snomed_desc) %>%
   # create new columns to be used in dropdown menus for readability
   mutate(icd = paste0(icd_code, ' - ', icd_desc),

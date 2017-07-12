@@ -289,7 +289,7 @@ freqcodes <- reactive({
     summarise(count = n()) %>%
     top_n(20, count)
 })
-
+  
 output$frequentCodesPlot <- renderPlot({
   ggplot(freqcodes(), aes(reorder(cat, -table(cat)[cat]), count)) +
     geom_bar(stat = 'identity') + 
@@ -297,6 +297,29 @@ output$frequentCodesPlot <- renderPlot({
     ggtitle('Condition Frequencies') +
     xlab('condition') + ylab('number occurrences')
 })
+
+# download the plot
+output$codesPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste("codes", input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(ggplot(freqcodes(), aes(reorder(cat, -table(cat)[cat]), count)) +
+      geom_bar(stat = 'identity') + 
+      coord_flip() +
+      ggtitle('Condition Frequencies') +
+      xlab('condition') + ylab('number occurrences'))
+    dev.off()  # turn the device off
+  }
+)
+
+
 
 
 
