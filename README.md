@@ -1,6 +1,5 @@
-# comorbidity-miner
+# comorbidity-miner  [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.376231.svg)](https://doi.org/10.5281/zenodo.376231)
 This repository contains the scripts necessary to run an R Shiny app that mines healthcare data for association rules and sequential patterns and allows exploratory analysis by healthcare workers and researchers using different concept heirarchies developed by the biomedical informatics community. The app currently supports MIMIC-III and AEOLUS data as well as ICD9-CM codes, CCS single- and multi-level categories, and SNOMED-CT concepts, but it can handle any patient-level data. CDC National Vital Statistics and ICD10-CM codes and mappings will be integrated in the near future. 
-
 
 ## Accessing the Data
 Some of the publicly available data are provided, while restricted data and very large data will need to be downloaded. The app is data-input-agnostic, meaning that data can be loaded from CSV files or from a database connection. Supported databases include SQL, mySQL, PostgreSQL, and sqlite.
