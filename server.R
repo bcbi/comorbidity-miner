@@ -68,6 +68,12 @@ shinyServer(function(input, output, session) {
 # cohort selection
 # search by ICD codes, ICD chapters, or CCS categories
 ######################################################
+# cohort name for saving images  
+cohort_name <- reactive({ifelse(input$interaction == 'Condition 1 + Condition 2', 
+         paste0(gsub(' - .*', '', input$code), '_plus_', gsub(' - .*', '', input$code2)),
+         paste0(gsub(' - .*', '', input$code), '_minus_', gsub(' - .*', '', input$code2)))
+})
+
 # data source determines appropriate mapping dataframe
 mapping <- reactive({
   if(input$data_src == 'mimic') {
@@ -301,7 +307,7 @@ output$frequentCodesPlot <- renderPlot({
 # download the plot
 output$codesPlotDownload <- downloadHandler(
   filename =  function() {
-    paste("codes", input$png_pdf, sep=".")
+    paste("codes_", input$png_pdf, sep=".")
   },
   # content is a function with argument file. content writes the plot to the device
   content = function(file) {
@@ -375,9 +381,65 @@ output$frequentPatientsPlot <- renderPlot({
     xlab('condition') + ylab('number patients')
 })
 
-output$testTable <- renderDataTable({
-  datatable(freqpatients())
+# download the plot
+output$cohortPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste(paste0("cohort_", cohort_name()), input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(ggplot(freqpatients(), aes(reorder(cat, -table(cat)[cat]), count)) +
+              geom_bar(stat = 'identity') + 
+              coord_flip() +
+              ggtitle('Cohort Condition Frequencies') +
+              xlab('condition') + ylab('number patients'))
+    dev.off()  # turn the device off
+  }
+)
+
+# demographics plots
+# TODO: add demo_column to ui.R as dropdown menu with choices = column names
+observe({
+  if(input$grouping_lvl == 'icd') {updateSelectInput(session, "demo_column", choices = names(get_cohort()$demographics))}
 })
+
+demographics_plot <- reactive({
+  df <- get_cohort()$demographics %>%
+    select(input$demo_column)
+})
+
+output$demographicsPlot <- renderPlot({
+  ggplot(demographics_plot(), aes(input$demo_column)) +
+    geom_bar() + 
+    ggtitle('Demographic Variable Cuts')
+})
+
+# download the plot
+output$demographicsPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste(paste0("demographics_", cohort_name()), input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(ggplot(freqcodes(), aes(reorder(cat, -table(cat)[cat]), count)) +
+            geom_bar(stat = 'identity') + 
+            coord_flip() +
+            ggtitle('Condition Frequencies') +
+            xlab('condition') + ylab('number occurrences'))
+    dev.off()  # turn the device off
+  }
+)
+
 
 ######################
 # temporal
@@ -1430,7 +1492,33 @@ output$sankey <- renderGvis({
                                                       width: 6}}"))
   })
        
-
+# download the plot
+output$sequencesPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste("cohort", input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(gvisSankey(get_seqs()$seqdfViz, from = 'from', to = 'to', weight = 'max_support',
+                       options = list(height = 850,
+                                      width = 850,
+                                      sankey = "{
+                                      link: {color: {
+                                      fill: 'lightblue'}},
+                                      node: {label: {
+                                      fontName: 'Times',
+                                      fontSize: 11,
+                                      bold: true},
+                                      interactivity: false,
+                                      width: 6}}")))
+    dev.off()  # turn the device off
+  }
+)
 
 
 
@@ -1491,6 +1579,57 @@ output$rulesPlot <- renderPlot(itemFrequencyPlot(rules()$trans, support = input$
 output$rulesMatrixPlot <- renderPlot(matrixPlot(), height = 800)
 
 output$rulesGraphPlot <- renderPlot(graphPlot(), height = 800)
+
+# download the plot
+output$arulesItemsPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste(paste0("arules_freqitems", cohort_name()), input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(itemFrequencyPlot(rules()$trans, support = input$supportA, topN = input$topN))
+    dev.off()  # turn the device off
+}
+                     )
+
+# download the plot
+output$arulesMatrixPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste(paste0("arules_matrix_", cohort_name()), input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(matrixPlot())
+    dev.off()  # turn the device off
+}
+                     )
+
+# download the plot
+output$arulesGraphPlotDownload <- downloadHandler(
+  filename =  function() {
+    paste(paste0("arules_graph_", cohort_name()), input$png_pdf, sep=".")
+  },
+  # content is a function with argument file. content writes the plot to the device
+  content = function(file) {
+    print(file)
+    if(input$png_pdf == "png")
+      png(file) # open the png device
+    else
+      pdf(file) # open the pdf device
+    print(graphPlot())
+    dev.off()  # turn the device off
+}
+                     )
 
 
 # ======================================================================================================

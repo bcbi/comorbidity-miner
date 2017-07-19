@@ -37,7 +37,12 @@ shinyUI(dashboardPage(
       
       menuItem(
         "Association Rules", tabName = "association"
-        )
+        ),
+      
+      # TO DO:
+      menuItem(
+        "Define Case/Control Groups"
+      )
     
       )
     
@@ -140,7 +145,9 @@ shinyUI(dashboardPage(
       tabItem("all_patients",
               tabsetPanel(
                 tabPanel('ICD Mapping', dataTableOutput("outGroupTable")),
-                tabPanel('Condition Histogram', plotOutput("frequentCodesPlot"), radioButtons("png_pdf", "Select File Type", list("png", "pdf")), downloadButton("codesPlotDownload", "Download Plot"))
+                tabPanel('Condition Histogram', plotOutput("frequentCodesPlot"), 
+                         radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                         downloadButton("codesPlotDownload", "Download Codes Plot"))
                 )
               ),
               
@@ -150,9 +157,21 @@ shinyUI(dashboardPage(
               tabsetPanel(
                 tabPanel("Demographics", dataTableOutput("demographicsTable")),
                 tabPanel("All Unique Codes", dataTableOutput("patientsTable")),
-                tabPanel("Condition Histogram", plotOutput("frequentPatientsPlot"))
+                tabPanel("Condition Histogram", plotOutput("frequentPatientsPlot"), 
+                         radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                         downloadButton("cohortPlotDownload", "Download Cohort Plot")),
+                tabPanel("Plot Demographics",
+                         fluidRow(column(width = 12, 
+                                  selectInput("demo_column", 
+                                              "Select Demographics Variable",
+                                              choices = list('')),
+                                  br(),
+                                  plotOutput("demographicsPlot"), 
+                                  radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                                  downloadButton("demographicsPlotDownload", "Download Demographics Plot")))
                 )
-              ),
+              )
+            ),
               
       
       # sequence
@@ -191,7 +210,9 @@ shinyUI(dashboardPage(
                 column(width = 9,
                        tabsetPanel(
                          tabPanel("Sequences", dataTableOutput("sequencesTable")),
-                         tabPanel("Sankey Diagram", htmlOutput("sankey"))
+                         tabPanel("Sankey Diagram", htmlOutput("sankey"), 
+                                  radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                                  downloadButton("sequencesPlotDownload", "Download Sequences Plot"))
                        )
                        )
               )
@@ -238,9 +259,15 @@ shinyUI(dashboardPage(
                          ),
                        column(width = 8,
                               tabsetPanel(
-                                tabPanel("Frequent Items", plotOutput("rulesPlot")),
-                                tabPanel("Arules", plotOutput("rulesMatrixPlot")),
-                                tabPanel("ArulesGraph", plotOutput("rulesGraphPlot"))
+                                tabPanel("Frequent Items", plotOutput("rulesPlot"), 
+                                         radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                                         downloadButton("arulesItemsPlotDownload", "Download Frequent Items Plot")),
+                                tabPanel("Arules", plotOutput("rulesMatrixPlot"), 
+                                         radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                                         downloadButton("arulesMatrixPlotDownload", "Download Matrix Plot")),
+                                tabPanel("ArulesGraph", plotOutput("rulesGraphPlot"), 
+                                         radioButtons("png_pdf", "Select File Type", list("png", "pdf")), 
+                                         downloadButton("arulesGraphPlotDownload", "Download Graph Plot"))
                               )
                        )
                 )
