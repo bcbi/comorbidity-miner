@@ -1,0 +1,10 @@
+repo:       comorbidity-miner
+site_name:  comorbidity-miner
+maintainers:
+  - name: Ashley Less
+    github_user: alee35
+
+repo_url: https://github.com/bcbi/comorbidity-miner
+site_description: Mines healthcare data for association rules and sequential patterns
+doi: 10.5281/zenodo.376231 
+type: software
